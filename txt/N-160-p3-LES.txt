@@ -1,0 +1,15 @@
+#Input file for fr-burgers-turbulent.py program
+N			160 # Number of mesh points
+NREF			0 # Number of refinement levels of the mesh
+P			3 # Polynomial degree for FR scheme, which is the degree of the lagrange polynomial
+VISC			0.000080 # Viscosity
+INISOL			TURBULENT # Initial solution type: SINE, GAUSSIAN, SQUARE, TURBULENT
+DT			0.000050 # Time step
+TSIM			0.500000 # Maximum number of iteration
+NDUMP			10 # Interval of iteration to dump a solution
+# --- LES Parameters --- 
+USE_LES			TRUE
+SGS_MODEL_TYPE		smagorinsky_dynamic
+SGS_FILTER_RATIO	2.00
+SGS_AVG_TYPE		global
+SGS_CS_MIN		0.0100
