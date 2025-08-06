@@ -5,113 +5,231 @@ Created on Mon Sep 30 22:24:55 2024
 @author: Jesús Pueblas
 """
 
-from sys import argv
-from randw import *
-from lagpol import *
+# postprocess.py (Versión Universal y Corregida)
+
+import numpy as np
 import matplotlib.pyplot as plt
+from sys import argv
+from scipy.interpolate import griddata
 
-def collpaseCommonNodes(x,U,p):
-    Ne = int(len(x) / (p+1))
-    newSize = Ne*p + 1
-    xc = np.zeros(newSize)
-    Uc = np.zeros(newSize)
-    xc[0] = x[0]
-    Uc[0] = (U[0]+U[-1])*0.5
-    
-    ip = 1
-    for icell in range(0,Ne):
-        iL = icell*(p+1)
-        for jp in range(1,p):
-            xc[ip] = x[iL+jp]
-            Uc[ip] = U[iL+jp]
-            ip += 1
-        iR = icell*(p+1) + p
-        iN = iR + 1
-        if (iN > len(x)-1):
-            iN = 0
-        um = (U[iR]+U[iN])*0.5
-        xc[ip] = x[iR]
-        Uc[ip] = um
-        ip += 1
-    return xc,Uc
-            
+# Suponemos que randw.py está en el mismo directorio y contiene estas funciones
+from randw import getValueFromLabel, ReadBlockData 
 
-def getSolutionInUniformMesh(x,U,p):
-    monCoef = getLagrangeMonomialCoefficients(p)
-    Ne = int(len(x) / (p+1))
-    xeq = np.zeros(len(x))
-    Ueq = np.zeros(len(x))
-    for icell in range(0,Ne):
-        iL = icell*(p+1)
-        iR = iL + p
-        xL = x[iL]
-        xR = x[iR]
-        dx = (xR - xL) / p
-        for jp in range(0,p+1):
-            xj = xL + jp*dx
-            xeq[iL+jp] = xj
-            chi = 2*(xj-xL)/(xR-xL)-1
-            Uj = 0.
-            for kp in range(0,p+1):
-                Lj = getLagrangeValue(monCoef,chi,kp)
-                Uj += U[iL+kp] * Lj
-            Ueq[iL+jp] = Uj
-    return xeq,Ueq
+# --- FUNCIONES DE AYUDA ---
+
+def get_mesh_and_solution_1d(document):
+    """Lee los datos de un archivo de solución 1D (x, u)."""
+    data_lines = ReadBlockData(document, "BEGIN_SOLUTION", "END_SOLUTION")
+    num_nodes = len(data_lines)
+    x = np.zeros(num_nodes)
+    u = np.zeros(num_nodes)
+    for i, line in enumerate(data_lines):
+        fields = line.split()
+        if len(fields) == 2:
+            x[i] = float(fields[0])
+            u[i] = float(fields[1])
+    return x, u
+
+def get_mesh_and_solution_2d(document):
+    """Lee los datos de un archivo de solución 2D (x, y, u, v)."""
+    data_lines = ReadBlockData(document, "BEGIN_SOLUTION", "END_SOLUTION")
+    num_nodes = len(data_lines)
+    x = np.zeros(num_nodes)
+    y = np.zeros(num_nodes)
+    u = np.zeros(num_nodes)
+    v = np.zeros(num_nodes)
+    for i, line in enumerate(data_lines):
+        fields = line.split()
+        if len(fields) == 4:
+            x[i] = float(fields[0])
+            y[i] = float(fields[1])
+            u[i] = float(fields[2])
+            v[i] = float(fields[3])
+    return x, y, u, v
+
+def get_tke_spectrum_2d(u, v, Nx, Ny, p_order):
+    """
+    Calcula el espectro de energía 1D a partir de campos de velocidad 2D
+    mediante un promedio acimutal del espectro 2D.
+    """
+    # 1. Remodelar los datos a una rejilla 2D.
+    # El número de nodos por dimensión en la malla de alto orden es (Ne*p + 1)
+    # Para una malla discontinua, es más complejo. Asumiremos que los datos
+    # se pueden remodelar a una rejilla cuadrada para la FFT.
+    nodes_per_dim = int(np.sqrt(len(u)))
+    if nodes_per_dim**2 != len(u):
+        print("ADVERTENCIA: El espectro 2D asume una malla de nodos cuadrada.")
+        return np.array([]), np.array([])
+        
+    u_grid = u.reshape((nodes_per_dim, nodes_per_dim))
+    v_grid = v.reshape((nodes_per_dim, nodes_per_dim))
+
+    # 2. Restar la media para obtener las fluctuaciones
+    u_prime = u_grid - np.mean(u_grid)
+    v_prime = v_grid - np.mean(v_grid)
+
+    # 3. Calcular la FFT 2D de cada componente de velocidad
+    u_hat = np.fft.fft2(u_prime)
+    v_hat = np.fft.fft2(v_prime)
+
+    # 4. Calcular el espectro de energía 2D (proporcional a |û|^2 + |v̂|^2)
+    # Se usa fftshift para mover la frecuencia cero al centro de la matriz
+    tke_spectrum_2d = np.real(u_hat * np.conj(u_hat) + v_hat * np.conj(v_hat))
+    tke_spectrum_2d_shifted = np.fft.fftshift(tke_spectrum_2d)
+
+    # 5. Crear la rejilla de números de onda (k_x, k_y)
+    kx = np.fft.fftshift(np.fft.fftfreq(nodes_per_dim, d=1.0/nodes_per_dim))
+    ky = np.fft.fftshift(np.fft.fftfreq(nodes_per_dim, d=1.0/nodes_per_dim))
+    kx_grid, ky_grid = np.meshgrid(kx, ky)
+
+    # 6. Calcular el radio de los números de onda (k) y aplanarlo
+    k_radius = np.sqrt(kx_grid**2 + ky_grid**2).flatten()
+    tke_spectrum_flat = tke_spectrum_2d_shifted.flatten()
+
+    # 7. Realizar el promedio acimutal
+    # Se agrupa la energía en "bins" o "cajas" según su radio k
+    k_bins = np.arange(0.5, nodes_per_dim//2, 1.)
     
-def getTKEFFT(x,U):
+    # Se usa np.histogram para sumar la energía en cada bin
+    energy_in_bins, _ = np.histogram(k_radius, bins=k_bins, weights=tke_spectrum_flat)
+    
+    # Se cuenta cuántos puntos caen en cada bin para normalizar
+    count_in_bins, _ = np.histogram(k_radius, bins=k_bins)
+    
+    # Evitar división por cero
+    valid_bins = count_in_bins > 0
+    
+    # El espectro 1D es la energía promediada en cada anillo
+    k_1d = k_bins[:-1][valid_bins]
+    tke_1d = energy_in_bins[valid_bins] / count_in_bins[valid_bins]
+    
+    return k_1d, tke_1d
+
+def getTKEFFT(x, U):
+    """
+    Calcula el Espectro de Energía Cinética para datos 1D usando FFT.
+    (Esta es tu función original).
+    """
     N = len(U)
+    if N == 0:
+        return np.array([]), np.array([])
+        
     X = np.abs(np.fft.fft(U)) / N
-    k = np.linspace(0, N-1,N)
+    k = np.linspace(0, N-1, N)
     kplot = k[0:int(N/2+1)]
     Xplot = 2 * X[0:int(N/2+1)]
-    Xplot[0] /= 2
     
-    for k in range(1,len(Xplot)):
-        Xplot[k] = 0.25*Xplot[k]**2
-
-    # Remove the DC since it is the mean value
-    Xplot = np.delete(Xplot,0)
-    kplot = np.delete(kplot,0)
+    if len(Xplot) > 0:
+        Xplot[0] /= 2
     
-    return kplot,Xplot
+    for k_idx in range(1, len(Xplot)):
+        Xplot[k_idx] = 0.25 * Xplot[k_idx]**2
 
+    if len(Xplot) > 0:
+        Xplot = np.delete(Xplot, 0)
+        kplot = np.delete(kplot, 0)
+    
+    return kplot, Xplot
+
+# --- FUNCIONES DE GRÁFICA ---
+
+def plot_1d_results(ax1, ax2, x, u, label):
+    """Crea las gráficas para resultados 1D (solución y espectro)."""
+    # Gráfica de la solución
+    ax1.plot(x, u, label=label)
+    ax1.set_title("Solución u(x)")
+    ax1.set_xlabel("x")
+    ax1.set_ylabel("u")
+    ax1.grid(True)
+    if label: ax1.legend()
+    
+    # Gráfica del Espectro de Energía llamando a getTKEFFT
+    # Nos aseguramos de tener al menos 2 puntos para el FFT
+    if len(x) > 1:
+        xt = x[:-1]
+        ut = u[:-1]
+        k, tke = getTKEFFT(xt, ut)
+        if len(k) > 0:
+            ax2.loglog(k, tke, label=label)
+
+    ax2.set_title("Espectro de Energía (1D)")
+    ax2.set_xlabel("Número de Onda (k)")
+    ax2.set_ylabel("Energía")
+    ax2.grid(True, which="both", ls="--")
+    if label: ax2.legend()
+
+
+def plot_2d_results(ax1, ax2, x, y, u, v, resolution=200):
+    """Crea las gráficas de contorno para resultados 2D."""
+    # 1. Crear una rejilla uniforme para la visualización
+    grid_x = np.linspace(np.min(x), np.max(x), resolution)
+    grid_y = np.linspace(np.min(y), np.max(y), resolution)
+    grid_xx, grid_yy = np.meshgrid(grid_x, grid_y)
+    
+    # 2. Interpolar los datos a la rejilla uniforme
+    points = np.vstack((x, y)).T
+    grid_u = griddata(points, u, (grid_xx, grid_yy), method='cubic')
+    grid_v = griddata(points, v, (grid_xx, grid_yy), method='cubic')
+    
+    # 3. Graficar los campos
+    im1 = ax1.pcolormesh(grid_xx, grid_yy, grid_u, shading='auto', cmap='viridis')
+    ax1.set_title("Campo de Velocidad 'u'")
+    ax1.set_xlabel("x")
+    ax1.set_ylabel("y")
+    ax1.set_aspect('equal', 'box')
+    
+    im2 = ax2.pcolormesh(grid_xx, grid_yy, grid_v, shading='auto', cmap='viridis')
+    ax2.set_title("Campo de Velocidad 'v'")
+    ax2.set_xlabel("x")
+    ax2.set_ylabel("y")
+    ax2.set_aspect('equal', 'box')
+    
+    return im1, im2
+
+
+# --- Bloque de Ejecución Principal (Universal) ---
 if __name__ == "__main__":
-    fig, ax = plt.subplots(1,2)
-    ax[0].set_title("Solution") 
-    ax[1].set_title("Energy spectrum")
-
-    for i in range(1,len(argv)):
-      inputfile=open(argv[i],'r')
-      documenti = inputfile.readlines()
-      inputfile.close()
-      
-      xi,ui = GetMeshAndSolution(documenti)
-      p     = int(getValueFromLabel(documenti,"P"))
-      
-      xe,ue = getSolutionInUniformMesh(xi,ui,p)
-      xc,uc = collpaseCommonNodes(xe,ue,p)
-
-      # Remove last element for proper FFT
-      xt = xc[:-1]
-      ut = uc[:-1]
-
-      fi,ffti = getTKEFFT(xt,ut)
-      
-      plt.subplot(1,2,1)
-      plt.plot(xi, ui,label=argv[i])
-      plt.subplot(1,2,2)
-      plt.plot(fi, ffti)
-
-    plt.subplot(1,2,1)
-    plt.xlabel("x")
-    plt.ylabel("u")
-    plt.legend(loc="upper right")
-    plt.subplot(1,2,2)
-    plt.xlabel("k")
-    plt.ylabel("TKE")
-    plt.xscale('log')
-    plt.yscale('log')
-
-    plt.tight_layout()
-    plt.show()
+    if len(argv) < 2:
+        print("Usage: python postprocess.py <resultado1.txt> <resultado2.txt> ...")
     
+    for i in range(1, len(argv)):
+        filepath = argv[i]
+        try:
+            with open(filepath, 'r') as f:
+                document = f.readlines()
+            
+            print(f"Procesando archivo: {filepath}")
+
+            # Detección automática del formato 1D vs 2D
+            first_data_line = ReadBlockData(document, "BEGIN_SOLUTION", "END_SOLUTION")[0]
+            num_columns = len(first_data_line.split())
+            
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+            fig.suptitle(f"Resultados para '{filepath}'", fontsize=16)
+
+            if num_columns == 2:
+                print("Formato 1D detectado.")
+                x, u = get_mesh_and_solution_1d(document)
+                plot_1d_results(ax1, ax2, x, u, label=filepath)
+                
+            elif num_columns == 4:
+                print("Formato 2D detectado.")
+                x, y, u, v = get_mesh_and_solution_2d(document)
+                im1, im2 = plot_2d_results(ax1, ax2, x, y, u, v)
+                fig.colorbar(im1, ax=ax1, orientation='vertical', fraction=0.046, pad=0.04)
+                fig.colorbar(im2, ax=ax2, orientation='vertical', fraction=0.046, pad=0.04)
+
+            else:
+                print(f"Error: Formato de archivo no reconocido en '{filepath}' con {num_columns} columnas.")
+                plt.close(fig) # Cerramos la figura vacía
+                continue
+            
+            plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+        except FileNotFoundError:
+            print(f"Error: No se pudo encontrar el archivo {filepath}")
+        except Exception as e:
+            print(f"Ocurrió un error procesando {filepath}: {e}")
+
+    if len(argv) > 1:
+        plt.show()

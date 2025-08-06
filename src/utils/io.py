@@ -97,12 +97,20 @@ def AddSingleDataExp(document,label,value):
 
 
 # Write the input data of the simulation:
-def WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_params=None):
+def WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_params=None, Nx=None, Ny=None):
     newLine = "# Input file for fr-burgers-turbulent.py program\n"
     document.append(newLine)
 
     newLine="N      " + '%15i' % N     + " # Number of mesh points\n"
     document.append(newLine)
+    
+    if Nx is not None:
+        newLine = "NX     " + '%15i' % Nx + " # Number of mesh points in X\n"
+        document.append(newLine)
+    if Ny is not None:
+        newLine = "NY     " + '%15i' % Ny + " # Number of mesh points in Y\n"
+        document.append(newLine)
+    
     newLine="NREF   " + '%15i' % Nref  + " # Number of refinement levels of the mesh\n"
     document.append(newLine)
     newLine="P      " + '%15i' % p     + " # Polynomial degree for FR scheme, which is the degree of the lagrange polynomial\n"
@@ -134,7 +142,7 @@ def WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_pa
     document.append("\n")
 
 # Write the solution file
-def WriteFile(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_params=None):
+def WriteFile_1D(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_params=None):
     print("Dumping solution ....")
     nnode = len(x)
     # Few postprocess of the solution
@@ -153,3 +161,28 @@ def WriteFile(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_par
     outputfile = open(filename,'w')
     outputfile.writelines(document)
     outputfile.close()
+    
+    
+def WriteFile_2D(filename, x, y, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump):
+    """
+    Escribe el archivo de solución para una simulación 2D.
+    Guarda 4 columnas: x, y, u, v.
+    """
+    print(f"Dumping 2D solution to {filename}....")
+    num_nodes = len(x)
+    u_view = U[0:num_nodes]
+    v_view = U[num_nodes:]
+    
+    solution_lines = []
+    for i in range(num_nodes):
+        line = f"{x[i]:.15e} {y[i]:.15e} {u_view[i]:.15e} {v_view[i]:.15e}\n"
+        solution_lines.append(line)
+
+    document = []
+    # Usamos la versión actualizada de WriteInputData
+    WriteInputData(document, -1, p, v, Nref, IniS, dt, tsim, Ndump, Nx=Nx, Ny=Ny)
+    AddBlockData(document, "BEGIN_SOLUTION", "END_SOLUTION", solution_lines)
+
+    with open(filename, 'w') as outputfile:
+        outputfile.writelines(document)
+

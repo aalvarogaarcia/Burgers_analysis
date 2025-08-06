@@ -1,6 +1,8 @@
 # sgs_model.py
 import numpy as np
 
+from ..core.basis import*
+
 # Necesitaremos funciones de lagpol.py y posiblemente mesh.py si no se pasan todos los datos
 # from lagpol import getLobattoPoints, Lp, gp # O mejor, pasar estos como argumentos
 
@@ -319,22 +321,4 @@ def calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, x_ho, y_h
         if alpha_ij_sq < 1e-12: # Evitar división por cero
             continue
 
-        # Calcular el tensor beta = delta^2 * alpha^T * alpha
-        beta = delta_sq * (alpha.T @ alpha)
-        
-        # Calcular B_beta (un invariante de la matriz beta)
-        b11, b12, b13 = beta[0,0], beta[0,1], beta[0,2]
-        b22, b23 = beta[1,1], beta[1,2]
-        b33 = beta[2,2]
-        
-        B_beta = b11*b22 - b12**2 + b11*b33 - b13**2 + b22*b33 - b23**2
-        
-        # Salvaguarda numérica como se sugiere en el paper 
-        if B_beta < 1e-8:
-             nu_e[i] = 0
-             continue
-
-        # 3. Calcular la viscosidad turbulenta
-        nu_e[i] = c_vreman * np.sqrt(B_beta / alpha_ij_sq)
-        
-        return nu_e
+        # Calcular el tensor beta = delta^2 * a

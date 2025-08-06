@@ -1,0 +1,19 @@
+## --- Simulation Case: Compare_FR_Smagorinsky_N64_P3.txt --- ##
+
+PROB_TYPE            2D
+SCHEME               FR
+P                    3
+NX                   64
+NY                   64
+NVAR                 2
+VISC                 0.001
+TSIM                 5.0
+DT                   0.0001
+NDUMP                500
+INISOL               TURB
+USE_LES              1
+SGS_MODEL_TYPE       SMAGORINSKY
+CS                   0.15
+CV                   0.1
+FILTER_TYPE          BOX
+TEST_FILTER_WIDTH    2.0

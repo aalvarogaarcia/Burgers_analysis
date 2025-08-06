@@ -39,32 +39,30 @@ def getL2Norm(documenta,documentb):
     #Take the solution of the boundary cells for mesh a
     nnodea = len(usa)
     ncellsa = int(nnodea / (pa+1))
-    ua = [ ]
-    ua.append(usa[0])
+    ua = np.zeros(dof)
+    ua[0] = usa[0]
+    ua[dof-1] = usa[nnodea-1]
     for icell in range(0,ncellsa-1):
         inodeL = icell*(pa+1)+pa
         inodeR = (icell+1)*(pa+1)
-        ua.append(usa[inodeL])
-        ua.append(usa[inodeR])
-    ua.append(usa[nnodea-1])
+        ua[icell+1] = 0.5*(usa[inodeL]+usa[inodeR])
 
     #Take the solution of the boundary cells for mesh b
     nnodeb = len(usb)
     ncellsb = int(nnodeb / (pb+1))
-    ub = [ ]
-    ub.append(usb[0])
+    ub = np.zeros(dof)
+    ub[0] = usb[0]
+    ub[dof-1] = usb[nnodeb-1]
     for icell in range(0,ncellsa-1):
         inodeL = 2*icell*(pa+1)+2*(pa+1)-1
         inodeR = inodeL+1
-        ub.append(usb[inodeL])
-        ub.append(usb[inodeR])
-    ub.append(usb[nnodeb-1])
+        ub[icell+1] = 0.5*(usb[inodeL]+usb[inodeR])
         
-    for inode in range(0,len(ua)):
+    for inode in range(0,dof):
         delta = ub[inode] - ua[inode]
         l2norm += delta * delta
     
-    l2norm = np.sqrt(l2norm/len(ua))
+    l2norm = np.sqrt(l2norm/dof)
     dof = len(xsa)
 
     return dof,l2norm    

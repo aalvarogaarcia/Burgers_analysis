@@ -11,7 +11,7 @@ from scipy.integrate import quad
 from scipy.integrate import simpson
 from math import erf
 from sys import exit
-from randw import *
+from src.utils.io import *
 
 # Returns the initial spectrum for a given length wave
 def E0(k):
@@ -26,7 +26,7 @@ def E0(k):
     return Ek
 
 # Fill initial solution
-def FillInitialSolution(U,x,IniS,Np,p,Nref):
+def FillInitialSolution_1D(U,x,IniS,Np,p,Nref):
     N=len(U)
     if (IniS=="SINE"):
         for i in range(0,N):
@@ -78,6 +78,32 @@ def FillInitialSolution(U,x,IniS,Np,p,Nref):
         xd,Ud = GetMeshAndSolution(document)
         for i in range(0,N):
             U[i] = Ud[i]
+
+def FillInitialSolution_2D(U, x, y, IniS, Nx, Ny, p, Nref):
+    """
+    Rellena el vector de estado U con una condición inicial 2D.
+    U contiene 'u' y 'v' concatenados.
+    """
+    num_nodes = len(x)
+    u_view = U[0:num_nodes]      # Vista para la componente u
+    v_view = U[num_nodes:]       # Vista para la componente v
+
+    if IniS == "TAYLOR_GREEN":
+        # Vórtice de Taylor-Green: una solución analítica para Navier-Stokes
+        # que es excelente para verificar la convergencia del código.
+        # u(x,y) = sin(pi*x) * cos(pi*y)
+        # v(x,y) = -cos(pi*x) * sin(pi*y)
+        u_view[:] = np.sin(np.pi * x) * np.cos(np.pi * y)
+        v_view[:] = -np.cos(np.pi * x) * np.sin(np.pi * y)
+    
+    elif IniS == "GAUSSIAN_2D":
+        # Un pulso Gaussiano en el centro del dominio para la componente u
+        u_view[:] = np.exp(-100 * ((x - 0.5)**2 + (y - 0.5)**2))
+        v_view[:] = 0.0 # Sin velocidad inicial en v
         
+    else:
+        print(f"ADVERTENCIA: Condición inicial 2D '{IniS}' no reconocida. Usando cero.")
+        u_view[:] = 0.0
+        v_view[:] = 0.0
         
             

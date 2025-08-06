@@ -13,12 +13,12 @@ Reconstrucción de flujos Burgers en 2D
 import numpy as np
 from sys import argv, exit
 
-from mesh import get_2d_cartesian_mesh, get_mesh_ho_2d
-from miscellaneous import FillInitialSolution_2D
-from randw import getValueFromLabel, WriteFile_2D, WriteInputData
-from lagpol import getStandardElementData
-from ode import RK4
-from residual import get_residual_2d
+from src.core.mesh import *
+from src.utils.misc import *
+from src.utils.io import *
+from src.core.basis import*
+from src.core.time_integration import *
+from src.core.discretization import *
 import traceback
 
 def Usage():
@@ -67,7 +67,7 @@ def Run(document, lab):
     for it in range(Nmax):
         # 'v' (viscosidad) se pasa aquí en el paquete de argumentos
         args_for_residual = (p, (x_ho, y_ho), v, (Lp_matrix, gp_array), Nx, Ny, use_les, sgs_params)
-        U = RK4(dt, U, get_residual_2d, *args_for_residual)
+        U = rk4(dt, U, get_residual_2d, args_for_residual)
         
         current_time = (it + 1) * dt
         print(f"it: {it+1}/{Nmax}, t: {current_time:.4f}")

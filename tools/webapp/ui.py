@@ -1,3 +1,11 @@
+"""
+Created on Thu Jun 12 11:03:39 2025
+
+@author: agarm
+
+Modulo visual y de estilo de la UI
+"""
+
 # ui.py
 from shiny import ui
 
@@ -17,6 +25,12 @@ app_ui = ui.page_fluid(
                     ui.h4("Parámetros de Simulación"),
                     ui.input_slider("p_order", "Orden Polinomial (P)", min=1, max=8, value=2),
                     ui.input_slider("visc", "Viscosidad (VISC)", min=0.001, max=0.1, value=0.01, step=0.001),
+                    ui.input_slider("n_points", "Puntos de Malla (N)", min=50, max=500, value=100, step=10),
+                    ui.input_slider("tsim", "Tiempo de Simulación", min=0.1, max=5.0, value=1.0, step=0.1),
+                    ui.input_slider("dt", "Paso de Tiempo (DT)", min=1e-5, max=1e-3, value=1e-4, step=1e-5),
+                    
+                    ui.output_ui("stability_advisor"),
+                    
                     ui.input_select("inisol", "Condición Inicial", {
                         "SINE": "Seno",
                         "GAUSSIAN": "Gaussiana",
@@ -34,6 +48,7 @@ app_ui = ui.page_fluid(
                         ui.input_select("sgs_model_type", "Modelo SGS", 
                                         {"smagorinsky_dynamic": "Smagorinsky Dinámico"}),
                         ui.input_slider("sgs_cs_min", "Valor Mínimo de Cs", min=0.0, max=0.25, value=0.01, step=0.01),
+                        ui.input_slider("sgs_filter_ratio", "Razón del Filtro (Δ̂/Δ)", min=1.5, max=3.0, value=2.0, step=0.1)
                     ),
                     
                     ui.hr(),

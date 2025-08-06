@@ -5,7 +5,7 @@ Created on Mon Sep 30 19:45:13 2024
 @author: Jesús Pueblas
 """
 import numpy as np
-import sgs_model
+from src.models.sgs import *
 
 # Get the residual for the flux reconstruction scheme and the Burgers equation
 def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_params=None): # <--- Nuevos argumentos
@@ -58,7 +58,7 @@ def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_param
             # Calcular Cd dinámicamente
             # Lp y gp se pasan porque la función en sgs_model.py los necesita para calcular derivadas internas
             # si no se pasa dudx directamente.
-            Cd_val_dynamic = sgs_model.calculate_dynamic_smagorinsky_constant(
+            Cd_val_dynamic = calculate_dynamic_smagorinsky_constant(
                 U_bar=U, 
                 p_order=p, 
                 x_coords=x, 
@@ -69,7 +69,7 @@ def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_param
                 cs_min_val=sgs_params.get('Cs_min',0.01)
             )
             # Calcular el flujo SGS usando el Cd dinámico
-            F_sgs = sgs_model.get_sgs_flux_smagorinsky_dynamic(
+            F_sgs = get_sgs_flux_smagorinsky_dynamic(
                 U_bar=U, 
                 p_order=p, 
                 x_coords=x, 
@@ -166,3 +166,126 @@ def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_param
             R[inodej_global] = -(sum_Fdc_deriv + correction_Fc + sum_Fdd_deriv + correction_Fd) * dchidx_cell
             
     return R
+
+
+def calculate_gradients_2d(U, p, x_coords, y_coords, lagrange_data, Nx, Ny):
+    num_nodes_per_var = len(U) // 2
+    u, v = U[:num_nodes_per_var], U[num_nodes_per_var:]
+    Lp_matrix, gp_array = lagrange_data
+    num_elements_x, num_elements_y = Nx - 1, Ny - 1
+    nodes_per_element_1d = p + 1
+    dudx, dudy = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
+    dvdx, dvdy = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
+
+    for j_elem in range(num_elements_y):
+        for i_elem in range(num_elements_x):
+            base_idx = (j_elem * num_elements_x + i_elem) * (nodes_per_element_1d**2)
+            element_nodes_indices = [base_idx + l * nodes_per_element_1d + m for l in range(nodes_per_element_1d) for m in range(nodes_per_element_1d)]
+            u_element = u[element_nodes_indices].reshape((nodes_per_element_1d, nodes_per_element_1d))
+            v_element = v[element_nodes_indices].reshape((nodes_per_element_1d, nodes_per_element_1d))
+            deriv_u_ksi, deriv_v_ksi = u_element @ Lp_matrix.T, v_element @ Lp_matrix.T
+            deriv_u_eta, deriv_v_eta = Lp_matrix @ u_element, Lp_matrix @ v_element
+            idx_sw, idx_se = element_nodes_indices[0], element_nodes_indices[p]
+            idx_nw = element_nodes_indices[p * nodes_per_element_1d]
+            dx, dy = x_coords[idx_se] - x_coords[idx_sw], y_coords[idx_nw] - y_coords[idx_sw]
+            dksi_dx, deta_dy = (2.0 / dx if dx != 0 else 0), (2.0 / dy if dy != 0 else 0)
+            dudx[element_nodes_indices] = (deriv_u_ksi * dksi_dx).flatten()
+            dudy[element_nodes_indices] = (deriv_u_eta * deta_dy).flatten()
+            dvdx[element_nodes_indices] = (deriv_v_ksi * dksi_dx).flatten()
+            dvdy[element_nodes_indices] = (deriv_v_eta * deta_dy).flatten()
+    return dudx, dudy, dvdx, dvdy
+
+def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=False, sgs_params=None):
+    x_ho, y_ho = coords
+    Lp_matrix, gp_array = lagrange_data
+    num_nodes_per_var = len(U) // 2
+    u, v_vel = U[:num_nodes_per_var], U[num_nodes_per_var:]
+
+    dudx, dudy, dvdx, dvdy = calculate_gradients_2d(U, p, x_ho, y_ho, lagrange_data, Nx, Ny)
+    
+    nu_e = np.zeros(num_nodes_per_var)
+    if use_les and sgs_params:
+        model_type = sgs_params.get('model_type')
+        if model_type == 'vreman':
+            c_vreman = sgs_params.get('c_vreman', 0.07)
+            nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, x_ho, y_ho, c_vreman)
+        elif model_type == 'smagorinsky':
+            Cs = sgs_params.get('Cs', 0.1)
+            nu_e = get_sgs_flux_smagorinsky_dynamic(dudx, dudy, dvdx, dvdy, p, Nx, Ny, Cs)
+            
+    total_viscosity = v_molecular + nu_e
+
+    Fu, Gu = (0.5 * u**2 - total_viscosity * dudx), (u * v_vel - total_viscosity * dudy)
+    Fv, Gv = (u * v_vel - total_viscosity * dvdx), (0.5 * v_vel**2 - total_viscosity * dvdy)
+    
+    div_F_u, div_G_u = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
+    div_F_v, div_G_v = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
+    
+    num_elements_x, num_elements_y = Nx - 1, Ny - 1
+    nodes_per_element_1d = p + 1
+
+    for j_elem in range(num_elements_y):
+        for i_elem in range(num_elements_x):
+            base_idx = (j_elem * num_elements_x + i_elem) * (nodes_per_element_1d**2)
+            i_L, i_R = (i_elem - 1 + num_elements_x) % num_elements_x, (i_elem + 1) % num_elements_x
+            j_B, j_T = (j_elem - 1 + num_elements_y) % num_elements_y, (j_elem + 1) % num_elements_y
+            
+            for l in range(nodes_per_element_1d):
+                idx_L, idx_R = base_idx + l*nodes_per_element_1d, base_idx + l*nodes_per_element_1d + p
+                idx_L_neigh = (j_elem*num_elements_x + i_L)*(nodes_per_element_1d**2) + l*nodes_per_element_1d + p
+                idx_R_neigh = (j_elem*num_elements_x + i_R)*(nodes_per_element_1d**2) + l*nodes_per_element_1d
+                
+                u_normal_L = 0.5 * (u[idx_L] + u[idx_L_neigh])
+                F_common_u_L = 0.5 * (Fu[idx_L] + Fu[idx_L_neigh] - abs(u_normal_L) * (u[idx_L] - u[idx_L_neigh]))
+                F_common_v_L = 0.5 * (Fv[idx_L] + Fv[idx_L_neigh] - abs(u_normal_L) * (v_vel[idx_L] - v_vel[idx_L_neigh]))
+                
+                u_normal_R = 0.5 * (u[idx_R] + u[idx_R_neigh])
+                F_common_u_R = 0.5 * (Fu[idx_R] + Fu[idx_R_neigh] - abs(u_normal_R) * (u[idx_R] - u[idx_R_neigh]))
+                F_common_v_R = 0.5 * (Fv[idx_R] + Fv[idx_R_neigh] - abs(u_normal_R) * (v_vel[idx_R] - v_vel[idx_R_neigh]))
+                
+                for m in range(nodes_per_element_1d):
+                    curr = base_idx + l*nodes_per_element_1d + m
+                    gp_L, gp_R = gp_array[m], -gp_array[p-m]
+                    div_F_u[curr] += (F_common_u_L - Fu[idx_L])*gp_L + (F_common_u_R - Fu[idx_R])*gp_R
+                    div_F_v[curr] += (F_common_v_L - Fv[idx_L])*gp_L + (F_common_v_R - Fv[idx_R])*gp_R
+
+            for m in range(nodes_per_element_1d):
+                idx_B, idx_T = base_idx + m, base_idx + p*nodes_per_element_1d + m
+                idx_B_neigh = (j_B*num_elements_x + i_elem)*(nodes_per_element_1d**2) + p*nodes_per_element_1d + m
+                idx_T_neigh = (j_T*num_elements_x + i_elem)*(nodes_per_element_1d**2) + m
+                
+                v_normal_B = 0.5 * (v_vel[idx_B] + v_vel[idx_B_neigh])
+                G_common_u_B = 0.5 * (Gu[idx_B] + Gu[idx_B_neigh] - abs(v_normal_B) * (u[idx_B] - u[idx_B_neigh]))
+                G_common_v_B = 0.5 * (Gv[idx_B] + Gv[idx_B_neigh] - abs(v_normal_B) * (v_vel[idx_B] - v_vel[idx_B_neigh]))
+
+                v_normal_T = 0.5 * (v_vel[idx_T] + v_vel[idx_T_neigh])
+                G_common_u_T = 0.5 * (Gu[idx_T] + Gu[idx_T_neigh] - abs(v_normal_T) * (u[idx_T] - u[idx_T_neigh]))
+                G_common_v_T = 0.5 * (Gv[idx_T] + Gv[idx_T_neigh] - abs(v_normal_T) * (v_vel[idx_T] - v_vel[idx_T_neigh]))
+
+                for l in range(nodes_per_element_1d):
+                    curr = base_idx + l*nodes_per_element_1d + m
+                    gp_B, gp_T = gp_array[l], -gp_array[p-l]
+                    div_G_u[curr] += (G_common_u_B - Gu[idx_B])*gp_B + (G_common_u_T - Gu[idx_T])*gp_T
+                    div_G_v[curr] += (G_common_v_B - Gv[idx_B])*gp_B + (G_common_v_T - Gv[idx_T])*gp_T
+
+    num_elem = num_elements_x * num_elements_y
+    for i in range(num_elem):
+        nodes_slice = slice(i*nodes_per_element_1d**2, (i+1)*nodes_per_element_1d**2)
+        div_F_u[nodes_slice] += (Fu[nodes_slice].reshape((nodes_per_element_1d, nodes_per_element_1d)) @ Lp_matrix.T).flatten()
+        div_G_u[nodes_slice] += (Lp_matrix @ Gu[nodes_slice].reshape((nodes_per_element_1d, nodes_per_element_1d))).flatten()
+        div_F_v[nodes_slice] += (Fv[nodes_slice].reshape((nodes_per_element_1d, nodes_per_element_1d)) @ Lp_matrix.T).flatten()
+        div_G_v[nodes_slice] += (Lp_matrix @ Gv[nodes_slice].reshape((nodes_per_element_1d, nodes_per_element_1d))).flatten()
+
+    R_u, R_v = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
+    for j_elem in range(num_elements_y):
+        for i_elem in range(num_elements_x):
+            base_idx = (j_elem * num_elements_x + i_elem) * (nodes_per_element_1d**2)
+            nodes_slice = slice(base_idx, base_idx + nodes_per_element_1d**2)
+            dx = x_ho[base_idx + p] - x_ho[base_idx]
+            dy = y_ho[base_idx + p*nodes_per_element_1d] - y_ho[base_idx]
+            dksi_dx, deta_dy = (2.0/dx if dx!=0 else 0), (2.0/dy if dy!=0 else 0)
+            
+            R_u[nodes_slice] = - (div_F_u[nodes_slice] * dksi_dx + div_G_u[nodes_slice] * deta_dy)
+            R_v[nodes_slice] = - (div_F_v[nodes_slice] * dksi_dx + div_G_v[nodes_slice] * deta_dy)
+
+    return np.concatenate((R_u, R_v))
