@@ -87,20 +87,20 @@ def Run(document,lab):
     dt = tsim / Nmax
 
     # Create the mesh
-    x = getMesh(N,Nref)
+    x = get_mesh_1d(N,Nref)
 
     # Get the local element coordinates and derivatives of polynomials
     lobattoPoints,Lp,gLp = getStandardElementData(p)
 
     # Get the high-order mesh
-    x = getMeshHO(x,lobattoPoints)
+    x = get_mesh_ho_1d(x,lobattoPoints)
 
     nnode = len(x)
 
     # Fill the initial solution
     U = np.zeros(nnode)
 
-    FillInitialSolution(U,x,IniS,N,p,Nref)
+    FillInitialSolution_1D(U,x,IniS,N,p,Nref)
 
     graph, = ax.plot(x, U, label=lab)
     ax.legend(loc='upper right')
