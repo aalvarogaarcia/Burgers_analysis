@@ -10,12 +10,11 @@ Created on Sun Sep 29 06:44:53 2024
 import numpy as np
 from src.core.mesh import *
 from src.utils.misc import *
-from src.utils.io import *
-from src.core.basis import *
-from src.models.sgs import *
+from src.utils.randw import *
+from src.core.lagpol import *
 from sys import argv
 from sys import exit
-from src.core.time_integration import *
+from src.core.ode import *
 import os
 import matplotlib.pyplot as plt
 
@@ -88,20 +87,20 @@ def Run(document,lab):
     dt = tsim / Nmax
 
     # Create the mesh
-    x = get_mesh_1d(N,Nref)
+    x = getMesh(N,Nref)
 
     # Get the local element coordinates and derivatives of polynomials
     lobattoPoints,Lp,gLp = getStandardElementData(p)
 
     # Get the high-order mesh
-    x = get_mesh_ho_1d(x,lobattoPoints)
+    x = getMeshHO(x,lobattoPoints)
 
     nnode = len(x)
 
     # Fill the initial solution
     U = np.zeros(nnode)
 
-    FillInitialSolution_1D(U,x,IniS,N,p,Nref)
+    FillInitialSolution(U,x,IniS,N,p,Nref)
 
     graph, = ax.plot(x, U, label=lab)
     ax.legend(loc='upper right')
@@ -111,12 +110,11 @@ def Run(document,lab):
     figure.canvas.flush_events()
 
     for it in range(0,Nmax):
-        args_for_residual_1d = (p, x, v, Lp, gp, use_les, sgs_params)
-        U = rk4(dt, U, getResidual, args_for_residual_1d)
+        U = RK4(dt,U,p,x,v,Lp,gLp,use_les_simulation, sgs_model_parameters)
         print("it:",it,"t:",(it+1)*dt)
         
         if use_les_simulation and sgs_model_parameters['model_type'] == 'smagorinsky_dynamic':
-            Cd_current = get_last_calculated_Cd()
+            Cd_current = sgs_model.get_last_calculated_Cd()
             print(f"it: {it}, t: {(it+1)*dt:.4f}, Cd_dynamic: {Cd_current:.4e}")
 
         
@@ -125,9 +123,9 @@ def Run(document,lab):
             graph.set_ydata(U)
             figure.canvas.draw()
             figure.canvas.flush_events()
-            WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
+            WriteFile(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
     
-    WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
+    WriteFile(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
     graph.set_xdata(x)
     graph.set_ydata(U)
     figure.canvas.draw()

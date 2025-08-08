@@ -11,7 +11,7 @@ from scipy.integrate import quad
 from scipy.integrate import simpson
 from math import erf
 from sys import exit
-from src.utils.io import *
+from src.utils.randw import *
 
 # Returns the initial spectrum for a given length wave
 def E0(k):

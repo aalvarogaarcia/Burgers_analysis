@@ -5,8 +5,8 @@ Created on Mon Sep 30 19:45:13 2024
 @author: Jesús Pueblas
 """
 import numpy as np
-from src.models.sgs import *
-
+from ..models.sgs_model import *
+from ..models import sgs_model
 # Get the residual for the flux reconstruction scheme and the Burgers equation
 def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_params=None): # <--- Nuevos argumentos
     nnode = len(U)
@@ -58,7 +58,7 @@ def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_param
             # Calcular Cd dinámicamente
             # Lp y gp se pasan porque la función en sgs_model.py los necesita para calcular derivadas internas
             # si no se pasa dudx directamente.
-            Cd_val_dynamic = calculate_dynamic_smagorinsky_constant(
+            Cd_val_dynamic = sgs_model.calculate_dynamic_smagorinsky_constant(
                 U_bar=U, 
                 p_order=p, 
                 x_coords=x, 
@@ -69,7 +69,7 @@ def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_param
                 cs_min_val=sgs_params.get('Cs_min',0.01)
             )
             # Calcular el flujo SGS usando el Cd dinámico
-            F_sgs = get_sgs_flux_smagorinsky_dynamic(
+            F_sgs = sgs_model.get_sgs_flux_smagorinsky_dynamic(
                 U_bar=U, 
                 p_order=p, 
                 x_coords=x, 
@@ -211,7 +211,7 @@ def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=Fa
             nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, x_ho, y_ho, c_vreman)
         elif model_type == 'smagorinsky':
             Cs = sgs_params.get('Cs', 0.1)
-            nu_e = get_sgs_flux_smagorinsky_dynamic(dudx, dudy, dvdx, dvdy, p, Nx, Ny, Cs)
+            nu_e = sgs_model.calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, Cs)
             
     total_viscosity = v_molecular + nu_e
 

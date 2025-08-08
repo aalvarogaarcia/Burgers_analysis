@@ -5,7 +5,7 @@ Created on Mon Sep 30 22:24:55 2024
 @author: Jesús Pueblas
 """
 
-# postprocess.py (Versión Universal y Corregida)
+# postprocess.py
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +13,7 @@ from sys import argv
 from scipy.interpolate import griddata
 
 # Suponemos que randw.py está en el mismo directorio y contiene estas funciones
-from randw import getValueFromLabel, ReadBlockData 
+from ...src.utils.randw import *
 
 # --- FUNCIONES DE AYUDA ---
 

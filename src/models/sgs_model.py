@@ -1,8 +1,6 @@
 # sgs_model.py
 import numpy as np
 
-from ..core.basis import*
-
 # Necesitaremos funciones de lagpol.py y posiblemente mesh.py si no se pasan todos los datos
 # from lagpol import getLobattoPoints, Lp, gp # O mejor, pasar estos como argumentos
 
@@ -291,34 +289,38 @@ def get_last_calculated_Cd():
     return _last_calculated_Cd_dynamic
 
 
-def calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, x_ho, y_ho, c_vreman):
+
+
+
+def calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, Cs):
     """
-    Calcula el campo de viscosidad turbulenta (nu_e) usando el modelo de Vreman.
+    Calcula el campo de viscosidad turbulenta (nu_e) usando el modelo estándar de Smagorinsky.
     """
     num_nodes = len(dudx)
     nu_e = np.zeros(num_nodes)
-    
+
     # 1. Definir el ancho del filtro Delta
-    # Usaremos una definición común: Delta = sqrt(dx*dy) / (p+1)
+    # Usaremos una definición estándar: Delta = (dx*dy)^(1/2)
     num_elements_x = Nx - 1
     num_elements_y = Ny - 1
     dx = 1.0 / num_elements_x
     dy = 1.0 / num_elements_y
-    delta_sq = (dx * dy) / ((p + 1)**2) # Delta al cuadrado
+    delta_sq = dx * dy # Delta al cuadrado
 
-    # 2. Bucle sobre cada nodo para calcular los tensores
+    # 2. Bucle sobre cada nodo para calcular la magnitud del tensor de deformación |S|
     for i in range(num_nodes):
-        # Ensamblar el tensor de gradiente de velocidad alpha (en 2D)
-        alpha = np.array([
-            [dudx[i], dudy[i], 0],
-            [dvdx[i], dvdy[i], 0],
-            [0,       0,       0]
-        ])
-        
-        # Calcular el denominador: alpha_ij * alpha_ij (norma de Frobenius al cuadrado)
-        alpha_ij_sq = np.sum(alpha**2)
-        
-        if alpha_ij_sq < 1e-12: # Evitar división por cero
-            continue
+        # Componentes del tensor de tasa de deformación S_ij
+        S11 = dudx[i]
+        S22 = dvdy[i]
+        S12 = 0.5 * (dudy[i] + dvdx[i])
+        S21 = S12
+        # El resto de componentes (S33, S13, etc.) son cero en 2D
 
-        # Calcular el tensor beta = delta^2 * a
+        # Calcular la magnitud |S| = sqrt(2 * S_ij * S_ij)
+        S_mag_sq = 2 * (S11**2 + S22**2 + S12**2 + S21**2)
+        S_mag = np.sqrt(S_mag_sq)
+
+        # 3. Calcular la viscosidad turbulenta
+        nu_e[i] = (Cs**2) * delta_sq * S_mag
+        
+    return nu_e
