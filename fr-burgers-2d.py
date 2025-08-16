@@ -154,11 +154,12 @@ if len(argv) < 2:
     Usage()
     exit()
 
-inputfile_path = argv[1:]
+inputfiles = argv[1:]
 try:
-    with open(inputfile_path, 'r') as f:
-        document = f.readlines()
-    Run(document, inputfile_path)
+    for path in inputfiles:
+        with open(path, 'r') as f:
+            document = f.readlines()
+        Run(document, path)
 except FileNotFoundError:
     print(f"Error: Archivo de entrada no encontrado en '{inputfile_path}'")
 except Exception as e:
