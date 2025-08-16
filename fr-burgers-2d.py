@@ -37,6 +37,7 @@ def Run(document, lab):
     IniS = getValueFromLabel(document, "INISOL")
     dt = float(getValueFromLabel(document, "DT"))
     tsim = float(getValueFromLabel(document, "TSIM"))
+    scheme = str(getValueFromLabel(document, "SCHEME"))
     Ndump = int(getValueFromLabel(document, "NDUMP"))
     Nref = 0
 
@@ -53,7 +54,7 @@ def Run(document, lab):
     # Configuración de la simulación
     Nmax = int(tsim / dt)
     if (Nmax * dt < tsim): Nmax += 1
-    dt = tsim / Nmax
+    dt = tsim / Nmaxf
 
     # Crear malla y estado inicial
     lobatto_points, Lp_matrix, gp_array = getStandardElementData(p)
@@ -68,7 +69,7 @@ def Run(document, lab):
         # 'v' (viscosidad) se pasa aquí en el paquete de argumentos
         args_for_residual = (p, (x_ho, y_ho), v, (Lp_matrix, gp_array), Nx, Ny, use_les, sgs_params)
         U = RK4(dt, U, get_residual_2d, *args_for_residual)
-        
+
         current_time = (it + 1) * dt
         print(f"it: {it+1}/{Nmax}, t: {current_time:.4f}")
 
