@@ -1,150 +1,130 @@
-# tools/generate_cases.py
 #
-# Script avanzado para generar conjuntos de casos de prueba para el TFM.
-# Permite crear sistemáticamente los ficheros de entrada para estudios
-# de convergencia y comparativas de modelos SGS.
-
+# SCRIPT PARA LA GENERACIÓN AUTOMÁTICA Y ORGANIZADA DE CASOS DE PRUEBA 2D
+#
 import os
-import copy
 
-# --- CONFIGURACIÓN BASE ---
-# Mantenemos una configuración por defecto como punto de partida.
+def write_config_file(config, filename, subdirectory):
+    """
+    Escribe un diccionario de configuración a un archivo .txt en una subcarpeta específica,
+    usando el formato requerido (mayúsculas y alineado).
+    """
+    # Directorio base donde se guardarán todas las carpetas de casos
+    base_directory = "data/inputs"
+    
+    # Crear la ruta completa a la subcarpeta (ej. 'data/inputs/vreman')
+    target_directory = os.path.join(base_directory, subdirectory)
 
-def get_default_config_2d():
-    """Devuelve un diccionario con una configuración 2D por defecto."""
-    return {
-        'PROB_TYPE': '2D',
-        'SCHEME': 'FR',
-        'P': 3,
-        'NX': 32,
-        'NY': 32,
-        'NVAR': 2,
-        'VISC': 1.0e-3,
-        'TSIM': 5.0,
-        'DT': 1.0e-4,
-        'NDUMP': 500,
-        'INISOL': 'TURB',
-        'USE_LES': False,
-        'SGS_MODEL_TYPE': 'NONE',
-        'CS': 0.1,
-        'CV': 0.1,
-        'FILTER_TYPE': 'BOX',
-        'TEST_FILTER_WIDTH': 2.0,
+    # Asegurarse de que el directorio de salida existe; si no, lo crea
+    if not os.path.exists(target_directory):
+        os.makedirs(target_directory)
+        print(f"Directorio creado: {target_directory}")
+
+    filepath = os.path.join(target_directory, filename)
+    
+    with open(filepath, 'w') as f:
+        print(f"Generando archivo: {filepath}...")
+        
+        # Escribir parámetros estándar
+        f.write(f"{'NX':<20}{config['NX']}\n")
+        f.write(f"{'NY':<20}{config['NY']}\n")
+        f.write(f"{'P':<20}{config['P']}\n")
+        f.write(f"{'SCHEME':<20}{config['SCHEME']}\n")
+        f.write(f"{'VISC':<20}{config['VISC']:.8f}\n")
+        f.write(f"{'INISOL':<20}{config['INISOL']}\n")
+        f.write(f"{'DT':<20}{config['DT']:.8f}\n")
+        f.write(f"{'TSIM':<20}{config['TSIM']:.8f}\n")
+        f.write(f"{'NDUMP':<20}{config['NDUMP']}\n")
+        
+        # Escribir parámetros LES
+        f.write(f"# --- LES Parameters ---\n")
+        f.write(f"{'USE_LES':<20}{str(config['USE_LES']).upper()}\n")
+        
+        if config['USE_LES']:
+            model_type = config.get('SGS_MODEL_TYPE', 'NONE')
+            f.write(f"{'SGS_MODEL_TYPE':<20}{model_type}\n")
+            if model_type == 'VREMAN':
+                f.write(f"{'SGS_C_VREMAN':<20}{config['SGS_C_VREMAN']}\n")
+            elif model_type == 'SMAGORINSKY':
+                f.write(f"{'SGS_CS_CONSTANT':<20}{config['SGS_CS_CONSTANT']}\n")
+
+def generate_vreman_cases():
+    """Genera un conjunto de casos de prueba para el modelo de Vreman."""
+    print("\n--- GENERANDO CASOS PARA VREMAN ---")
+    subdirectory = "vreman"
+    base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'SCHEME': 'FR', 'DT': 0.0001, 'NDUMP': 500,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.07,
     }
 
-# --- FUNCIÓN DE ESCRITURA ---
-# La función para escribir el fichero no cambia, pero nos aseguramos
-# de que apunte al directorio correcto.
-
-def write_config_file(config, filename, directory="data/inputs"):
-    """
-    Escribe un diccionario de configuración a un archivo .txt.
-
-    Args:
-        config (dict): Parámetros de la simulación.
-        filename (str): Nombre del archivo de salida.
-        directory (str): Directorio donde se guardará el archivo (relativo a la raíz).
-    """
-    # Nos aseguramos de que la ruta sea relativa a la raíz del proyecto
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    output_dir = os.path.join(project_root, directory)
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    filepath = os.path.join(output_dir, filename)
-
-    with open(filepath, 'w') as f:
-        f.write(f"## --- Simulation Case: {filename} --- ##\n\n")
-        for key, value in config.items():
-            if isinstance(value, bool):
-                value_str = '1' if value else '0'
-            else:
-                value_str = str(value)
-            f.write(f"{key.ljust(20)} {value_str}\n")
-
-    print(f"-> Caso generado: '{os.path.join(directory, filename)}'")
-
-
-# --- GENERADORES DE ESTUDIOS ---
-
-def generate_convergence_study_cases(p_order=3, scheme='FR'):
-    """
-    Genera los ficheros de entrada para un estudio de convergencia de malla.
-    Se crean casos con resoluciones crecientes (16, 32, 64, 128).
+    # Variaciones
+    variations = [
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.01,   'TSIM': 0.2, 'id': 'TG_Visc01_T02'},
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.005,  'TSIM': 1.0, 'id': 'TG_Visc005_T1'},
+        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.01,   'TSIM': 0.5, 'id': 'Gauss_Visc01_T05'},
+    ]
     
-    Objetivo del TFM relacionado: Verificación del solver (Paso 2 del plan).
-    """
-    print(f"\n--- Generando Casos para Estudio de Convergencia (P={p_order}, Esquema={scheme}) ---")
-    base_resolutions = [16, 32, 64, 128]
+    for var in variations:
+        config = base_config.copy()
+        config.update(var)
+        filename = f"Case_{var['id']}.txt"
+        write_config_file(config, filename, subdirectory)
+
+def generate_smagorinsky_cases():
+    """Genera un conjunto de casos de prueba para el modelo de Smagorinsky."""
+    print("\n--- GENERANDO CASOS PARA SMAGORINSKY ---")
+    subdirectory = "smagorinsky"
+    base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'SCHEME': 'FR', 'DT': 0.0001, 'NDUMP': 500,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.15,
+    }
     
-    for n in base_resolutions:
-        config = get_default_config_2d()
-        config['SCHEME'] = scheme
-        config['P'] = p_order
-        config['NX'] = n
-        config['NY'] = n
-        config['USE_LES'] = False # El estudio de convergencia se hace sobre el solver base
-        config['SGS_MODEL_TYPE'] = 'NONE'
-        config['TSIM'] = 0.5 # Tiempo corto, solo para verificar convergencia
-        
-        filename = f"Conv_{scheme}_P{p_order}_N{n}.txt"
-        write_config_file(config, filename)
-
-def generate_model_comparison_cases(resolution=64, p_order=3):
-    """
-    Genera un conjunto de casos para comparar los modelos ILES, Smagorinsky y Vreman
-    con un esquema numérico y una resolución fijos.
-
-    Objetivo del TFM relacionado: Comparativa de modelos SGS (Pasos 1, 3, 4 del plan).
-    """
-    print(f"\n--- Generando Casos para Comparativa de Modelos (N={resolution}, P={p_order}) ---")
+    # Usamos las mismas variaciones para poder comparar directamente
+    variations = [
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.01,   'TSIM': 0.2, 'id': 'TG_Visc01_T02'},
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.005,  'TSIM': 1.0, 'id': 'TG_Visc005_T1'},
+        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.01,   'TSIM': 0.5, 'id': 'Gauss_Visc01_T05'},
+    ]
     
-    # 1. Caso ILES (sin modelo explícito) con esquema FR
-    config_iles_fr = get_default_config_2d()
-    config_iles_fr['SCHEME'] = 'FR'
-    config_iles_fr['P'] = p_order
-    config_iles_fr['NX'] = resolution
-    config_iles_fr['NY'] = resolution
-    config_iles_fr['USE_LES'] = False
-    config_iles_fr['SGS_MODEL_TYPE'] = 'NONE'
-    write_config_file(config_iles_fr, f"Compare_FR_ILES_N{resolution}_P{p_order}.txt")
+    for var in variations:
+        config = base_config.copy()
+        config.update(var)
+        filename = f"Case_{var['id']}.txt"
+        write_config_file(config, filename, subdirectory)
 
-    # 2. Caso ILES (sin modelo explícito) con esquema DC
-    config_iles_dc = copy.deepcopy(config_iles_fr)
-    config_iles_dc['SCHEME'] = 'DC'
-    write_config_file(config_iles_dc, f"Compare_DC_ILES_N{resolution}_P{p_order}.txt")
+def generate_no_les_cases():
+    """Genera casos de prueba sin modelo LES (DNS/ILES) como base de comparación."""
+    print("\n--- GENERANDO CASOS SIN LES (BASE) ---")
+    subdirectory = "no_les"
+    base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'SCHEME': 'FR', 'DT': 0.0001, 'NDUMP': 500,
+        'USE_LES': False,
+    }
 
-    # 3. Caso LES con Smagorinsky (usando FR)
-    config_smag = copy.deepcopy(config_iles_fr)
-    config_smag['USE_LES'] = True
-    config_smag['SGS_MODEL_TYPE'] = 'SMAGORINSKY'
-    config_smag['CS'] = 0.15
-    write_config_file(config_smag, f"Compare_FR_Smagorinsky_N{resolution}_P{p_order}.txt")
-
-    # 4. Caso LES con Vreman (usando FR)
-    config_vreman = copy.deepcopy(config_iles_fr)
-    config_vreman['USE_LES'] = True
-    config_vreman['SGS_MODEL_TYPE'] = 'VREMAN'
-    config_vreman['CV'] = 0.1
-    write_config_file(config_vreman, f"Compare_FR_Vreman_N{resolution}_P{p_order}.txt")
-
+    # Usamos las mismas variaciones para tener una referencia clara
+    variations = [
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.01,   'TSIM': 0.2, 'id': 'TG_Visc01_T02'},
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.005,  'TSIM': 1.0, 'id': 'TG_Visc005_T1'},
+        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.01,   'TSIM': 0.5, 'id': 'Gauss_Visc01_T05'},
+    ]
+    
+    for var in variations:
+        config = base_config.copy()
+        config.update(var)
+        filename = f"Case_{var['id']}.txt"
+        write_config_file(config, filename, subdirectory)
 
 # --- PUNTO DE ENTRADA PRINCIPAL ---
-
 if __name__ == "__main__":
+    print("=================================================")
+    print("INICIANDO GENERACIÓN DE ARCHIVOS DE CONFIGURACIÓN")
+    print("=================================================")
     
-    # Generar los casos para el estudio de convergencia con el esquema FR
-    # Esto es crucial para el Paso 2 de nuestro plan: verificar la precisión del solver.
-    generate_convergence_study_cases(p_order=3, scheme='FR')
+    generate_vreman_cases()
+    generate_smagorinsky_cases()
+    generate_no_les_cases()
     
-    # Generar los casos para el estudio de convergencia con el esquema DC
-    generate_convergence_study_cases(p_order=2, scheme='DC') # DC es de orden 2
-
-    # Generar los casos para la comparativa principal de modelos.
-    # Esto aborda los Pasos 1, 3 y 4 del plan: comparar ILES vs LES (Smagorinsky, Vreman).
-    # Usamos una resolución media (64x64) que es típica para este tipo de análisis.
-    generate_model_comparison_cases(resolution=64, p_order=3)
-
-    print("\n¡Generación de casos de prueba completada!")
-
+    print("\n=================================================")
+    print("TODOS LOS ARCHIVOS HAN SIDO GENERADOS CON ÉXITO.")
+    print("Ahora puedes ejecutar tus simulaciones por directorios, por ejemplo:")
+    print("python fr-burgers-2d.py data/inputs/vreman/*.txt")
+    print("=================================================")

@@ -324,3 +324,111 @@ def calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, Cs):
         nu_e[i] = (Cs**2) * delta_sq * S_mag
         
     return nu_e
+
+
+def calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, Nx, Ny, c_vreman=0.07):
+    """
+    Calcula el campo de viscosidad turbulenta (nu_e) usando el modelo de Vreman.
+    Este modelo se basa en el paper: "An eddy-viscosity subgrid-scale model for
+    turbulent shear flow: Algebraic theory and applications" por A. W. Vreman (2004).
+
+    Args:
+        dudx, dudy, dvdx, dvdy (np.array): Derivadas del campo de velocidad.
+        Nx, Ny (int): Número de puntos en cada dirección.
+        c_vreman (float): Constante del modelo de Vreman. El valor por defecto es 0.07,
+                          recomendado en el paper.
+
+    Returns:
+        np.array: Campo de viscosidad turbulenta nu_e.
+    """
+    num_nodes = len(dudx)
+    nu_e = np.zeros(num_nodes)
+
+    # 1. Definir el ancho del filtro Delta al cuadrado (Delta^2)
+    # Se usa una definición estándar consistente con el modelo de Smagorinsky ya implementado.
+    num_elements_x = Nx - 1
+    num_elements_y = Ny - 1
+    dx = 1.0 / num_elements_x
+    dy = 1.0 / num_elements_y
+    delta_sq = dx * dy
+
+    # Bucle sobre cada nodo para calcular la viscosidad de Vreman
+    for i in range(num_nodes):
+        # 2. Tensor de gradiente de velocidad alpha_ij para 2D (el resto de componentes son 0)
+        alpha_11 = dudx[i]
+        alpha_12 = dvdx[i] # d(v)/dx
+        alpha_21 = dudy[i] # d(u)/dy
+        alpha_22 = dvdy[i]
+
+        # 3. Denominador del modelo: alpha_ij * alpha_ij (norma de Frobenius al cuadrado)
+        # alpha_ij*alpha_ij = sum_{i,j} alpha_ij^2
+        norm_alpha_sq = alpha_11**2 + alpha_12**2 + alpha_21**2 + alpha_22**2
+
+        # Si el gradiente es cero, la viscosidad también lo es para evitar división por cero.
+        if norm_alpha_sq < 1e-12:
+            nu_e[i] = 0.0
+            continue
+
+        # 4. Calcular el tensor beta_ij = Delta^2 * (alpha^T * alpha)
+        # beta = Delta^2 * | alpha_11^2 + alpha_21^2     alpha_11*alpha_12 + alpha_21*alpha_22 |
+        #                | alpha_12*alpha_11 + alpha_22*alpha_21     alpha_12^2 + alpha_22^2 |
+        beta_11 = delta_sq * (alpha_11**2 + alpha_21**2)
+        beta_12 = delta_sq * (alpha_11*alpha_12 + alpha_21*alpha_22)
+        beta_22 = delta_sq * (alpha_12**2 + alpha_22**2)
+        # beta_13, beta_23, beta_33, etc., son cero en 2D.
+
+        # 5. Calcular el invariante B_beta
+        # Para 2D, B_beta = beta_11*beta_22 - beta_12^2
+        B_beta = beta_11 * beta_22 - beta_12**2
+        
+        # El paper asegura B_beta >= 0. Se añade un clipping por si acaso hay errores numéricos.
+        if B_beta < 0:
+            B_beta = 0
+
+        # 6. Calcular la viscosidad turbulenta de Vreman
+        nu_e[i] = c_vreman * np.sqrt(B_beta / norm_alpha_sq)
+        
+    return nu_e
+
+
+
+
+
+def get_sgs_stress_vreman(nu_e, dudx, dudy, dvdx, dvdy):
+    """
+    Calcula los componentes del tensor de estrés sub-escala (SGS) tau_ij.
+    tau_ij = -2 * nu_e * S_ij, donde S_ij es el tensor de tasa de deformación.
+
+    Args:
+        nu_e (np.array): Campo de viscosidad turbulenta (del modelo de Vreman).
+        dudx, dudy, dvdx, dvdy (np.array): Derivadas del campo de velocidad.
+
+    Returns:
+        tuple[np.array, np.array, np.array]: Componentes del tensor de estrés SGS:
+                                             (tau_xx, tau_yy, tau_xy).
+    """
+    # Componentes del tensor de tasa de deformación S_ij
+    S11 = dudx
+    S22 = dvdy
+    S12 = 0.5 * (dudy + dvdx)
+
+    # Componentes del tensor de estrés SGS (tau_ij)
+    tau_xx = -2 * nu_e * S11
+    tau_yy = -2 * nu_e * S22
+    tau_xy = -2 * nu_e * S12 # tau_yx = tau_xy
+
+    return tau_xx, tau_yy, tau_xy
+
+
+
+
+
+
+
+
+
+
+
+
+
+

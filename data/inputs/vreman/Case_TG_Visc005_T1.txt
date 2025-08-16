@@ -1,0 +1,13 @@
+NX                  33
+NY                  33
+P                   2
+SCHEME              FR
+VISC                0.00500000
+INISOL              TAYLOR_GREEN
+DT                  0.00010000
+TSIM                1.00000000
+NDUMP               500
+# --- LES Parameters ---
+USE_LES             TRUE
+SGS_MODEL_TYPE      VREMAN
+SGS_C_VREMAN        0.07

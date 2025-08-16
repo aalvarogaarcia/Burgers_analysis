@@ -84,10 +84,27 @@ def FillInitialSolution_2D(U, x, y, IniS, Nx, Ny, p, Nref):
     Rellena el vector de estado U con una condición inicial 2D.
     U contiene 'u' y 'v' concatenados.
     """
-    num_nodes = len(x)
-    u_view = U[0:num_nodes]      # Vista para la componente u
-    v_view = U[num_nodes:]       # Vista para la componente v
+    num_nodes_per_var = len(U) // 2
+    u_view = U[:num_nodes_per_var]
+    v_view = U[num_nodes_per_var:]
 
+    x_grid, y_grid = x, y
+    
+    if len(x) != num_nodes_per_var or len(y) != num_nodes_per_var:
+        print("ADVERTENCIA (FillInitialSolution_2D): Las coordenadas de entrada no coinciden con el tamaño de U. Se generará una rejilla interna.")
+        # Crea el mapa completo usando meshgrid
+        xx, yy = np.meshgrid(x, y)
+        x_grid = xx.flatten()
+        y_grid = yy.flatten()
+        
+        # Comprobación de seguridad final
+        if len(x_grid) != num_nodes_per_var:
+            raise ValueError(
+                f"Error fatal en FillInitialSolution_2D: No se pudo crear una rejilla consistente. "
+                f"Se esperaban {num_nodes_per_var} nodos, pero se generaron {len(x_grid)}."
+            )
+            
+    
     if IniS == "TAYLOR_GREEN":
         # Vórtice de Taylor-Green: una solución analítica para Navier-Stokes
         # que es excelente para verificar la convergencia del código.

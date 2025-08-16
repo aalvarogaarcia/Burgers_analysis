@@ -209,16 +209,23 @@ def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=Fa
         model_type = sgs_params.get('model_type')
         if model_type == 'vreman':
             c_vreman = sgs_params.get('c_vreman', 0.07)
-            nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, x_ho, y_ho, c_vreman)
+            nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, Nx, Ny, c_vreman)
         elif model_type == 'smagorinsky':
             Cs = sgs_params.get('Cs', 0.1)
             nu_e = sgs_model.calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, p, Nx, Ny, Cs)
             
     total_viscosity = v_molecular + nu_e
 
-    Fu, Gu = (0.5 * u**2 - total_viscosity * dudx), (u * v_vel - total_viscosity * dudy)
-    Fv, Gv = (u * v_vel - total_viscosity * dvdx), (0.5 * v_vel**2 - total_viscosity * dvdy)
+    tau_xx = 2 * total_viscosity * dudx
+    tau_yy = 2 * total_viscosity * dvdy
+    tau_xy = total_viscosity * (dudy + dvdx)
     
+    Fu = (0.5 * u**2) - tau_xx
+    Gu = (u * v_vel) - tau_xy
+
+    Fv = (u * v_vel) - tau_xy
+    Gv = (0.5 * v_vel**2) - tau_yy
+
     div_F_u, div_G_u = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
     div_F_v, div_G_v = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
     
@@ -296,168 +303,134 @@ def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=Fa
 
 
 # ==============================================================================
-# --- MODELOS SGS PARA DIFERENCIAS CENTRADAS ---
+# --- GRADIENTES DIFERENCIAS CENTRADAS ---
 # ==============================================================================
+def calculate_gradients_2d_dc(U, Nx, Ny, coords):
+    """
+    Calcula los gradientes de las variables de velocidad (u, v) en una malla 2D
+    usando un esquema de diferencias centradas de segundo orden.
+    """
+    x_coords, y_coords = coords
+    num_nodes = Nx * Ny
+    u, v_vel = U[:num_nodes], U[num_nodes:]
 
-def calculate_smagorinsky_cd_2d(dudx, dudy, dvdx, dvdy, dx, dy, Cs):
-    """Calcula la viscosidad turbulenta para el modelo de Smagorinsky en una malla CD."""
-    # El ancho del filtro Delta se basa en el volumen de la celda.
-    delta_sq = dx * dy
-    
-    # Tensor de velocidad de deformación S_ij
-    S11 = dudx
-    S12 = 0.5 * (dudy + dvdx)
-    S22 = dvdy
-    
-    # Magnitud del tensor de deformación |S| = sqrt(2 * S_ij * S_ij)
-    S_mag_sq = 2 * (S11**2 + 2 * S12**2 + S22**2)
-    S_mag = np.sqrt(S_mag_sq)
-    
-    # Viscosidad turbulenta nu_t = (Cs * Delta)^2 * |S|
-    nu_t = (Cs**2) * delta_sq * S_mag
-    return nu_t
+    # Reformatear a matrices 2D para facilitar los cálculos
+    u_grid = u.reshape((Ny, Nx))
+    v_grid = v_vel.reshape((Ny, Nx))
 
-def calculate_vreman_cd_2d(dudx, dudy, dvdx, dvdy, dx, dy, Cv):
-    """Calcula la viscosidad turbulenta para el modelo de Vreman en una malla CD."""
-    delta_sq = dx * dy
-    nu_t = np.zeros_like(dudx)
+    # Calcular espaciado de la malla
+    dx = x_coords[1] - x_coords[0] if Nx > 1 else 1.0
+    dy = y_coords[Nx-1] - y_coords[0] if Ny > 1 else 1.0
 
-    for i in range(len(dudx)):
-        # Tensor gradiente de velocidad G
-        G = np.array([[dudx[i], dudy[i]], [dvdx[i], dvdy[i]]])
-        
-        # Invariante beta (simplificado para 2D)
-        beta = G[0,0]**2 + G[0,1]**2 + G[1,0]**2 + G[1,1]**2
-        
-        if beta < 1e-12:
-            continue
+    # Inicializar matrices de derivadas
+    dudx, dudy = np.zeros_like(u_grid), np.zeros_like(u_grid)
+    dvdx, dvdy = np.zeros_like(v_grid), np.zeros_like(v_grid)
+
+    # Calcular derivadas con condiciones periódicas
+    for j in range(Ny):
+        for i in range(Nx):
+            ip, im = (i + 1) % Nx, (i - 1 + Nx) % Nx
+            jp, jm = (j + 1) % Ny, (j - 1 + Ny) % Ny
+
+            dudx[j, i] = (u_grid[j, ip] - u_grid[j, im]) / (2 * dx)
+            dudy[j, i] = (u_grid[jp, i] - u_grid[jm, i]) / (2 * dy)
+            dvdx[j, i] = (v_grid[j, ip] - v_grid[j, im]) / (2 * dx)
+            dvdy[j, i] = (v_grid[jp, i] - v_grid[jm, i]) / (2 * dy)
+    
+    # Devolver los gradientes aplanados
+    return dudx.flatten(), dudy.flatten(), dvdx.flatten(), dvdy.flatten()
+
+def calculate_divergence_2d_dc(Fu, Gu, Fv, Gv, Nx, Ny, coords):
+    """
+    Calcula la divergencia de los flujos F=[Fu, Gu] y G=[Fv, Gv] en una malla 2D
+    usando un esquema de diferencias centradas de segundo orden.
+    """
+    x_coords, y_coords = coords
+    
+    # Reformatear flujos a matrices 2D
+    Fu_grid, Gu_grid = Fu.reshape((Ny, Nx)), Gu.reshape((Ny, Nx))
+    Fv_grid, Gv_grid = Fv.reshape((Ny, Nx)), Gv.reshape((Ny, Nx))
+
+    # Calcular espaciado de la malla
+    dx = x_coords[1] - x_coords[0] if Nx > 1 else 1.0
+    dy = y_coords[Nx-1] - y_coords[0] if Ny > 1 else 1.0
+
+    # Inicializar matrices de divergencia
+    div_F_u, div_G_u = np.zeros_like(Fu_grid), np.zeros_like(Gu_grid)
+    div_F_v, div_G_v = np.zeros_like(Fv_grid), np.zeros_like(Gv_grid)
+
+    # Calcular divergencia con condiciones periódicas
+    for j in range(Ny):
+        for i in range(Nx):
+            ip, im = (i + 1) % Nx, (i - 1 + Nx) % Nx
+            jp, jm = (j + 1) % Ny, (j - 1 + Ny) % Ny
             
-        # Viscosidad turbulenta nu_t = Cv * Delta * sqrt(det(G*G^T) / beta)
-        # Para 2D, esto se simplifica. Una formulación común es:
-        # nu_t = Cv * sqrt( (B_beta) / (alpha_ij*alpha_ij) ) * Delta
-        # Donde B_beta es un término más complejo. Usamos una aproximación robusta.
-        nu_t[i] = (Cv**2) * delta_sq * np.sqrt(np.abs(np.linalg.det(G)))
+            div_F_u[j, i] = (Fu_grid[j, ip] - Fu_grid[j, im]) / (2 * dx)
+            div_G_u[j, i] = (Gu_grid[jp, i] - Gu_grid[jm, i]) / (2 * dy)
+            div_F_v[j, i] = (Fv_grid[j, ip] - Fv_grid[j, im]) / (2 * dx)
+            div_G_v[j, i] = (Gv_grid[jp, i] - Gv_grid[jm, i]) / (2 * dy)
 
-    return nu_t
+    # El residuo es la negativa de la divergencia total del flujo
+    R_u = -(div_F_u + div_G_u)
+    R_v = -(div_F_v + div_G_v)
+
+    return R_u.flatten(), R_v.flatten()
 
 # ==============================================================================
 # --- CÁLCULO DE DERIVADAS Y RESIDUOS ---
 # ==============================================================================
 
-def calculate_cd_derivative_1d(field, dx):
-    """Calcula la derivada 1D con condiciones periódicas."""
-    dfdx = np.zeros_like(field)
-    dfdx[1:-1] = (field[2:] - field[:-2]) / (2 * dx)
-    dfdx[0] = (field[1] - field[-1]) / (2 * dx)
-    dfdx[-1] = (field[0] - field[-2]) / (2 * dx)
-    return dfdx
-
-def getResidual_CD_1D(U, p, x, v, Lp, gp, N, use_les, sgs_params):
-    """Calcula el residuo 1D para CD, ahora con LES (Smagorinsky estático)."""
-    dx = x[1] - x[0]
+def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params):
+    """
+    Calcula el residuo para las ecuaciones de Burgers 2D usando un esquema
+    de Diferencias Centradas (DC) de segundo orden.
+    Esta función está estructurada de forma modular, similar a get_residual_2d.
+    """
+    num_nodes_per_var = len(U)//2
     
-    dUdx = calculate_cd_derivative_1d(U, dx)
+    if num_nodes_per_var != Nx * Ny:
+        raise ValueError(
+            f"Inconsistencia de dimensiones: El vector de solución U implica {num_nodes_per_var} nodos, "
+            f"pero los parámetros Nx={Nx} y Ny={Ny} implican {Nx * Ny} nodos. "
+            "Revisa la creación de la malla en el script principal."
+        )
     
-    # Viscosidad turbulenta
-    nu_sgs = 0.0
-    if use_les:
-        sgs_model_type = sgs_params.get('SGS_MODEL_TYPE', 'NONE')
-        if sgs_model_type == 'SMAGORINSKY':
-            Cs = sgs_params.get('CS', 0.1)
-            delta_sq = dx**2
-            nu_sgs = (Cs**2) * delta_sq * np.abs(dUdx)
-        else:
-            print(f"ADVERTENCIA: Modelo LES '{sgs_model_type}' no implementado para CD 1D.")
+    u, v_vel = U[:num_nodes_per_var], U[num_nodes_per_var:]
+    
+    coord = coords
+    
+    # 1. Calcular todos los gradientes de velocidad
+    dudx, dudy, dvdx, dvdy = calculate_gradients_2d_dc(U, Nx, Ny, coord)
+    
+    # 2. Calcular viscosidad turbulenta (LES) si está activado
+    nu_e = np.zeros(num_nodes_per_var)
+    if use_les and sgs_params:
+        model_type = sgs_params.get('model_type')
+        if model_type == 'vreman':
+            c_vreman = sgs_params.get('c_vreman', 0.07)
+            nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, Nx, Ny, c_vreman)
+        elif model_type == 'smagorinsky':
+            Cs = sgs_params.get('Cs', 0.1)
+            # Para DC, p=0, ya que no hay polinomios de alto orden
+            nu_e = sgs_model.calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, 0, Nx, Ny, Cs)
             
-    nu_total = v + nu_sgs
+    # 3. Calcular el tensor de estrés total (molecular + SGS)
+    total_viscosity = v_molecular + nu_e
+    tau_xx = 2 * total_viscosity * dudx
+    tau_yy = 2 * total_viscosity * dvdy
+    tau_xy = total_viscosity * (dudy + dvdx)
     
-    # Flujo convectivo F = U^2 / 2
-    F = 0.5 * U**2
-    dFdx = calculate_cd_derivative_1d(F, dx)
-    
-    # Flujo disipativo total G = nu_total * dU/dx
-    G = nu_total * dUdx
-    dGdx = calculate_cd_derivative_1d(G, dx)
-    
-    R = dGdx - dFdx
-    return R
+    # 4. Construir los flujos convectivos y viscosos
+    Fu = (0.5 * u**2) - tau_xx
+    Gu = (u * v_vel) - tau_xy
+    Fv = (u * v_vel) - tau_xy
+    Gv = (0.5 * v_vel**2) - tau_yy
 
-def calculate_cd_derivative_2d(field, dx, dy, Nx, Ny, direction):
-    """Calcula la derivada 2D con condiciones periódicas."""
-    df_dir = np.zeros_like(field)
-    field_2d = field.reshape((Ny, Nx))
-    
-    if direction == 'x':
-        denom = 2 * dx
-        for j in range(Ny):
-            for i in range(Nx):
-                i_plus_1, i_minus_1 = (i + 1) % Nx, (i - 1 + Nx) % Nx
-                val = (field_2d[j, i_plus_1] - field_2d[j, i_minus_1]) / denom
-                df_dir[j * Nx + i] = val
-    elif direction == 'y':
-        denom = 2 * dy
-        for j in range(Ny):
-            for i in range(Nx):
-                j_plus_1, j_minus_1 = (j + 1) % Ny, (j - 1 + Ny) % Ny
-                val = (field_2d[j_plus_1, i] - field_2d[j_minus_1, i]) / denom
-                df_dir[j * Nx + i] = val
-    return df_dir
+    # 5. Calcular la divergencia de los flujos para obtener el residuo
+    R_u, R_v = calculate_divergence_2d_dc(Fu, Gu, Fv, Gv, Nx, Ny, coords)
 
-def getResidual_CD_2D(U, p, coords, v, basis, Nx, Ny, use_les, sgs_params):
-    """Calcula el residuo 2D para CD, ahora con LES."""
-    u, v_field = U[:Nx*Ny], U[Nx*Ny:]
-    dx = 1.0 / (Nx - 1) if Nx > 1 else 1.0
-    dy = 1.0 / (Ny - 1) if Ny > 1 else 1.0
-
-    # 1. Calcular derivadas de velocidad
-    dudx = calculate_cd_derivative_2d(u, dx, dy, Nx, Ny, 'x')
-    dudy = calculate_cd_derivative_2d(u, dx, dy, Nx, Ny, 'y')
-    dvdx = calculate_cd_derivative_2d(v_field, dx, dy, Nx, Ny, 'x')
-    dvdy = calculate_cd_derivative_2d(v_field, dx, dy, Nx, Ny, 'y')
-
-    # 2. Calcular viscosidad turbulenta (SGS)
-    nu_sgs = 0.0
-    if use_les:
-        sgs_model_type = sgs_params.get('SGS_MODEL_TYPE', 'NONE')
-        if sgs_model_type == 'SMAGORINSKY':
-            Cs = sgs_params.get('CS', 0.1)
-            nu_sgs = calculate_smagorinsky_cd_2d(dudx, dudy, dvdx, dvdy, dx, dy, Cs)
-        elif sgs_model_type == 'VREMAN':
-            Cv = sgs_params.get('CV', 0.1)
-            nu_sgs = calculate_vreman_cd_2d(dudx, dudy, dvdx, dvdy, dx, dy, Cv)
-        else:
-            print(f"ADVERTENCIA: Modelo LES '{sgs_model_type}' no implementado para CD 2D.")
-            
-    nu_total = v + nu_sgs
-
-    # 3. Calcular flujos convectivos y sus derivadas
-    F_u, G_u = u*u, u*v_field
-    F_v, G_v = u*v_field, v*v_field
-    dFudx = calculate_cd_derivative_2d(F_u, dx, dy, Nx, Ny, 'x')
-    dGudy = calculate_cd_derivative_2d(G_u, dx, dy, Nx, Ny, 'y')
-    dFvdx = calculate_cd_derivative_2d(F_v, dx, dy, Nx, Ny, 'x')
-    dGvdy = calculate_cd_derivative_2d(G_v, dx, dy, Nx, Ny, 'y')
-    
-    # 4. Calcular flujos disipativos totales y sus derivadas
-    G_diss_u_x, G_diss_u_y = nu_total * dudx, nu_total * dudy
-    G_diss_v_x, G_diss_v_y = nu_total * dvdx, nu_total * dvdy
-    dG_diss_udx = calculate_cd_derivative_2d(G_diss_u_x, dx, dy, Nx, Ny, 'x')
-    dG_diss_udy = calculate_cd_derivative_2d(G_diss_u_y, dx, dy, Nx, Ny, 'y')
-    dG_diss_vdx = calculate_cd_derivative_2d(G_diss_v_x, dx, dy, Nx, Ny, 'x')
-    dG_diss_vdy = calculate_cd_derivative_2d(G_diss_v_y, dx, dy, Nx, Ny, 'y')
-
-    # 5. Ensamblar el residuo final
-    R_u = (dG_diss_udx + dG_diss_udy) - (dFudx + dGudy)
-    R_v = (dG_diss_vdx + dG_diss_vdy) - (dFvdx + dGvdy)
-
+    # 6. Combinar los residuos en un único vector de salida
     return np.concatenate((R_u, R_v))
-
-
-
-
-
-
-
 
 
 

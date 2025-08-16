@@ -162,27 +162,71 @@ def WriteFile_1D(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_
     outputfile.writelines(document)
     outputfile.close()
     
-    
-def WriteFile_2D(filename, x, y, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump):
+
+def WriteInputData_2D(document, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les=False, sgs_params=None):
+    """
+    Escribe la cabecera con los parámetros de entrada para una simulación 2D,
+    usando tabuladores para alinear los valores.
+    """
+    # Usamos f-strings con alineación para crear columnas limpias.
+    # El '<20' asegura que la etiqueta ocupe 20 caracteres, alineada a la izquierda.
+    document.append(f"{'NX':<20}{Nx}\n")
+    document.append(f"{'NY':<20}{Ny}\n")
+    document.append(f"{'P':<20}{p}\n")
+    document.append(f"{'SCHEME':<20}{scheme}\n")
+    document.append(f"{'VISC':<20}{v:0.8f}\n")
+    document.append(f"{'NREF':<20}{Nref}\n")
+    document.append(f"{'INISOL':<20}{IniS}\n")
+    document.append(f"{'DT':<20}{dt:0.8f}\n")
+    document.append(f"{'TSIM':<20}{tsim:0.8f}\n")
+    document.append(f"{'NDUMP':<20}{Ndump}\n")
+    document.append(f"# --- LES Parameters ---\n")
+    document.append(f"{'USE_LES':<20}{str(use_les).upper()}\n")
+    if use_les and sgs_params:
+        model_type = sgs_params.get('model_type', 'none')
+        document.append(f"{'SGS_MODEL_TYPE':<20}{model_type}\n")
+        if model_type == 'smagorinsky':
+            document.append(f"{'SGS_CS_CONSTANT':<20}{sgs_params.get('Cs', 0.1)}\n")
+        elif model_type == 'vreman':
+            document.append(f"{'SGS_C_VREMAN':<20}{sgs_params.get('c_vreman', 0.07)}\n")
+
+def WriteFile_2D(filename, x, y, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les=False, sgs_params=None):
     """
     Escribe el archivo de solución para una simulación 2D.
-    Guarda 4 columnas: x, y, u, v.
     """
     print(f"Dumping 2D solution to {filename}....")
     num_nodes = len(x)
-    u_view = U[0:num_nodes]
+    u_view = U[:num_nodes]
     v_view = U[num_nodes:]
-    
-    solution_lines = []
+
+    usol = []
     for i in range(num_nodes):
-        line = f"{x[i]:.15e} {y[i]:.15e} {u_view[i]:.15e} {v_view[i]:.15e}\n"
-        solution_lines.append(line)
+        # Alinea también los datos de la solución para una mejor legibilidad
+        line = f'{x[i]:<25.15e}{y[i]:<25.15e}{u_view[i]:<25.15e}{v_view[i]:<25.15e}'
+        usol.append(line)
 
     document = []
-    # Usamos la versión actualizada de WriteInputData
-    WriteInputData(document, -1, p, v, Nref, IniS, dt, tsim, Ndump, Nx=Nx, Ny=Ny)
-    AddBlockData(document, "BEGIN_SOLUTION", "END_SOLUTION", solution_lines)
+    # La llamada a la función ahora genera el nuevo formato
+    WriteInputData_2D(document, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+    AddBlockData(document,"BEGIN_SOLUTION","END_SOLUTION",usol)
 
     with open(filename, 'w') as outputfile:
         outputfile.writelines(document)
-
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
