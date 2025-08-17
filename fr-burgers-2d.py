@@ -56,7 +56,7 @@ def Run(document, lab):
     if (Nmax * dt < tsim): Nmax += 1
     dt = tsim / Nmax
 
-
+    simulation_completed = False
     if scheme.lower() == "fr": 
     # --- Rama para Flux Reconstruction (FR) de alto orden ---
         print(f"INFO: Configurando simulación con esquema FR, Orden P={p}.")
@@ -88,8 +88,8 @@ def Run(document, lab):
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (FR)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme)
-                
+                WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme) 
+            
             
         else: 
             simulation_completed = True
@@ -117,7 +117,7 @@ def Run(document, lab):
         for it in range(Nmax):
             U_last_stable = np.copy(U)
         # Los argumentos son más simples para el residuo de DC
-            args_for_residual = ((x_coords, y_coords), v, Nx, Ny, use_les, sgs_params)
+            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params)
         # ¡¡IMPORTANTE: Llamamos a una nueva función de residuo!!
             U = RK4(dt, U, get_residual_2d_dc, *args_for_residual)
             
@@ -125,7 +125,7 @@ def Run(document, lab):
                 print(f"¡ERROR! Inestabilidad numérica detectada en la iteración {it+1}.")
                 print(f"Guardando el último estado estable en t = {it*dt:.4f}.")
                 lab_failed = lab.replace('.out', '_FAILED.out')
-                WriteFile_2D(lab_failed, x_coords, y_coords, U_last_stable, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+                WriteFile_2D(lab_failed, x_coords_full, y_coords_full, U_last_stable, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
                 break # Salir del bucle y continuar con el siguiente archivo
 
             
@@ -133,7 +133,7 @@ def Run(document, lab):
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (DC)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_coords, y_coords, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump)
+                WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme)
 
         else: 
             simulation_completed = True
@@ -146,7 +146,7 @@ def Run(document, lab):
         if scheme.lower() == 'fr':
             WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
         elif scheme.lower() == 'dc':
-            WriteFile_2D(lab, x_coords, y_coords, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+            WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
 
     
 # --- Bloque de ejecución principal ---

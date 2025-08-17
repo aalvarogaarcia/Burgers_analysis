@@ -320,7 +320,7 @@ def calculate_gradients_2d_dc(U, Nx, Ny, coords):
 
     # Calcular espaciado de la malla
     dx = x_coords[1] - x_coords[0] if Nx > 1 else 1.0
-    dy = y_coords[Nx-1] - y_coords[0] if Ny > 1 else 1.0
+    dy = y_coords[Nx] - y_coords[0] if Ny > 1 else 1.0
 
     # Inicializar matrices de derivadas
     dudx, dudy = np.zeros_like(u_grid), np.zeros_like(u_grid)
@@ -353,7 +353,7 @@ def calculate_divergence_2d_dc(Fu, Gu, Fv, Gv, Nx, Ny, coords):
 
     # Calcular espaciado de la malla
     dx = x_coords[1] - x_coords[0] if Nx > 1 else 1.0
-    dy = y_coords[Nx-1] - y_coords[0] if Ny > 1 else 1.0
+    dy = y_coords[Nx] - y_coords[0] if Ny > 1 else 1.0
 
     # Inicializar matrices de divergencia
     div_F_u, div_G_u = np.zeros_like(Fu_grid), np.zeros_like(Gu_grid)

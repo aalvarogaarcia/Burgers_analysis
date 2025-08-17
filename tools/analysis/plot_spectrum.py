@@ -6,14 +6,15 @@ Created on Mon Sep 30 22:24:55 2024
 """
 
 # postprocess.py
-
+import sys
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from sys import argv
 from scipy.interpolate import griddata
 
-# Suponemos que randw.py está en el mismo directorio y contiene estas funciones
-from ...src.utils.randw import *
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from src.utils.randw import *
 
 # --- FUNCIONES DE AYUDA ---
 

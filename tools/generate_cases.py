@@ -1,6 +1,3 @@
-#
-# SCRIPT PARA LA GENERACIÓN AUTOMÁTICA Y ORGANIZADA DE CASOS DE PRUEBA 2D
-#
 import os
 
 def write_config_file(config, filename, subdirectory):
@@ -8,13 +5,9 @@ def write_config_file(config, filename, subdirectory):
     Escribe un diccionario de configuración a un archivo .txt en una subcarpeta específica,
     usando el formato requerido (mayúsculas y alineado).
     """
-    # Directorio base donde se guardarán todas las carpetas de casos
     base_directory = "data/inputs"
-    
-    # Crear la ruta completa a la subcarpeta (ej. 'data/inputs/vreman')
     target_directory = os.path.join(base_directory, subdirectory)
 
-    # Asegurarse de que el directorio de salida existe; si no, lo crea
     if not os.path.exists(target_directory):
         os.makedirs(target_directory)
         print(f"Directorio creado: {target_directory}")
@@ -47,84 +40,225 @@ def write_config_file(config, filename, subdirectory):
             elif model_type == 'SMAGORINSKY':
                 f.write(f"{'SGS_CS_CONSTANT':<20}{config['SGS_CS_CONSTANT']}\n")
 
-def generate_vreman_cases():
-    """Genera un conjunto de casos de prueba para el modelo de Vreman."""
-    print("\n--- GENERANDO CASOS PARA VREMAN ---")
-    subdirectory = "vreman"
-    base_config = {
-        'NX': 33, 'NY': 33, 'P': 2, 'SCHEME': 'FR', 'DT': 0.0001, 'NDUMP': 500,
-        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.07,
-    }
+def generate_case_set(base_config, subdirectory):
+    """
+    Función modular que genera un conjunto completo de 10 casos de prueba
+    (5 FR y 5 DC) para una configuración base dada.
+    """
+    print(f"\n--- GENERANDO CASOS PARA: {subdirectory.upper()} ---")
 
-    # Variaciones
-    variations = [
-        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.01,   'TSIM': 0.2, 'id': 'TG_Visc01_T02'},
-        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.005,  'TSIM': 1.0, 'id': 'TG_Visc005_T1'},
-        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.01,   'TSIM': 0.5, 'id': 'Gauss_Visc01_T05'},
+    # --- Definir las variaciones de viscosidad ---
+    # 2 casos Taylor-Green
+    tg_variations = [
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.05, 'id': base_config['id'] + 'TG_Visc0.05'},
+        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.5,  'id': base_config['id'] + 'TG_Visc0.5'},
     ]
-    
-    for var in variations:
+    # 3 casos Gaussianos
+    gauss_variations = [
+        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.05, 'id': base_config['id'] + 'Gauss_Visc0.05'},
+        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.5,  'id': base_config['id'] + 'Gauss_Visc0.5'},
+        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.8,  'id': base_config['id'] + 'Gauss_Visc0.8'},
+    ]
+    all_variations = tg_variations + gauss_variations
+
+    # --- Generar 5 casos para el esquema FR ---
+    for var in all_variations:
         config = base_config.copy()
         config.update(var)
-        filename = f"Case_{var['id']}.txt"
+        config['SCHEME'] = 'FR'
+        filename = f"FR_{var['id']}.txt"
         write_config_file(config, filename, subdirectory)
 
-def generate_smagorinsky_cases():
-    """Genera un conjunto de casos de prueba para el modelo de Smagorinsky."""
-    print("\n--- GENERANDO CASOS PARA SMAGORINSKY ---")
-    subdirectory = "smagorinsky"
-    base_config = {
-        'NX': 33, 'NY': 33, 'P': 2, 'SCHEME': 'FR', 'DT': 0.0001, 'NDUMP': 500,
-        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.15,
-    }
-    
-    # Usamos las mismas variaciones para poder comparar directamente
-    variations = [
-        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.01,   'TSIM': 0.2, 'id': 'TG_Visc01_T02'},
-        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.005,  'TSIM': 1.0, 'id': 'TG_Visc005_T1'},
-        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.01,   'TSIM': 0.5, 'id': 'Gauss_Visc01_T05'},
-    ]
-    
-    for var in variations:
+    # --- Generar 5 casos para el esquema DC ---
+    for var in all_variations:
         config = base_config.copy()
         config.update(var)
-        filename = f"Case_{var['id']}.txt"
-        write_config_file(config, filename, subdirectory)
-
-def generate_no_les_cases():
-    """Genera casos de prueba sin modelo LES (DNS/ILES) como base de comparación."""
-    print("\n--- GENERANDO CASOS SIN LES (BASE) ---")
-    subdirectory = "no_les"
-    base_config = {
-        'NX': 33, 'NY': 33, 'P': 2, 'SCHEME': 'FR', 'DT': 0.0001, 'NDUMP': 500,
-        'USE_LES': False,
-    }
-
-    # Usamos las mismas variaciones para tener una referencia clara
-    variations = [
-        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.01,   'TSIM': 0.2, 'id': 'TG_Visc01_T02'},
-        {'INISOL': 'TAYLOR_GREEN', 'VISC': 0.005,  'TSIM': 1.0, 'id': 'TG_Visc005_T1'},
-        {'INISOL': 'GAUSSIAN_2D',  'VISC': 0.01,   'TSIM': 0.5, 'id': 'Gauss_Visc01_T05'},
-    ]
-    
-    for var in variations:
-        config = base_config.copy()
-        config.update(var)
-        filename = f"Case_{var['id']}.txt"
+        config['SCHEME'] = 'DC'
+        filename = f"DC_{var['id']}.txt"
         write_config_file(config, filename, subdirectory)
 
 # --- PUNTO DE ENTRADA PRINCIPAL ---
 if __name__ == "__main__":
     print("=================================================")
-    print("INICIANDO GENERACIÓN DE ARCHIVOS DE CONFIGURACIÓN")
+    print("INICIANDO GENERACIÓN DE CASOS DE PRUEBA ESTABLES")
     print("=================================================")
     
-    generate_vreman_cases()
-    generate_smagorinsky_cases()
-    generate_no_les_cases()
+    # --- 1. Generar casos SIN LES (ILES / DNS) ---
+    # Estos casos usarán viscosidades altas para garantizar la estabilidad.
+    no_les_base_config = {
+        'NX': 33, 'NY': 33, 'P': 5, 'DT': 0.0001, 'TSIM': 1., 'NDUMP': 500,
+        'USE_LES': False, 'id': 't_1_iles_' 
+    }
+    generate_case_set(no_les_base_config, "no_les_stable")
+
+    # --- 2. Generar casos con SMAGORINSKY ---
+    # Usamos viscosidades más bajas, ya que el modelo SGS añade disipación.
+    smagorinsky_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 1.0, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.15,
+        'id': 't_1_smg0.15_'
+    }
+    generate_case_set(smagorinsky_base_config, "smagorinsky")
+    
+    # --- 3. Generar casos con VREMAN ---
+    vreman_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 1.0, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.07,
+        'id': 't_1_vrn0.07_'
+    }
+    generate_case_set(vreman_base_config, "vreman")
+    
+    
+    smagorinsky_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 1.0, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.07,
+        'id': 't_1_smg0.07_'
+    }
+    generate_case_set(smagorinsky_base_config, "smagorinsky")
+    
+    # --- 3. Generar casos con VREMAN ---
+    vreman_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 1.0, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.15,
+        'id': 't_1_vrn0.15_'
+        
+    }
+    
+    generate_case_set(vreman_base_config, "vreman")
+    
+    
+       
+    
+    
+   ########################################
+   #-------------T = 2 -------------------#
+   ######################################## 
+    
+    #--- 1. Generar casos SIN LES (ILES / DNS) ---
+    # Estos casos usarán viscosidades altas para garantizar la estabilidad.
+    no_les_base_config = {
+        'NX': 33, 'NY': 33, 'P': 5, 'DT': 0.0001, 'TSIM': 2., 'NDUMP': 500,
+        'USE_LES': False, 'id': 't_2_iles_' 
+    }
+    generate_case_set(no_les_base_config, "no_les_stable")
+
+    # --- 2. Generar casos con SMAGORINSKY ---
+    # Usamos viscosidades más bajas, ya que el modelo SGS añade disipación.
+    smagorinsky_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 2., 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.15,
+        'id': 't_2_smg0.15_'
+    }
+    generate_case_set(smagorinsky_base_config, "smagorinsky")
+    
+    # --- 3. Generar casos con VREMAN ---
+    vreman_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 2., 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.07,
+        'id': 't_2_vrn0.07_'
+    }
+    generate_case_set(vreman_base_config, "vreman")
+    
+    
+    smagorinsky_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 2., 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.07,
+        'id': 't_2_smg0.07_'
+    }
+    generate_case_set(smagorinsky_base_config, "smagorinsky")
+    
+    # --- 3. Generar casos con VREMAN ---
+    vreman_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': 2., 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.15,
+        'id': 't_2_vrn0.15_'
+        
+    }
+    
+    generate_case_set(vreman_base_config, "vreman")
+    
+    
+    ########################################
+    #-------------T = 0.5 -------------------#
+    ######################################## 
+     
+    #--- 1. Generar casos SIN LES (ILES / DNS) ---
+    # Estos casos usarán viscosidades altas para garantizar la estabilidad.
+    no_les_base_config = {
+        'NX': 33, 'NY': 33, 'P': 5, 'DT': 0.0001, 'TSIM': .5, 'NDUMP': 500,
+        'USE_LES': False, 'id': 't_5_iles_' 
+    }
+    generate_case_set(no_les_base_config, "no_les_stable")
+
+    # --- 2. Generar casos con SMAGORINSKY ---
+    # Usamos viscosidades más bajas, ya que el modelo SGS añade disipación.
+    smagorinsky_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': .5, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.15,
+        'id': 't_5_smg0.15_'
+    }
+    generate_case_set(smagorinsky_base_config, "smagorinsky")
+    
+    # --- 3. Generar casos con VREMAN ---
+    vreman_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': .5, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.07,
+        'id': 't_5_vrn0.07_'
+    }
+    generate_case_set(vreman_base_config, "vreman")
+    
+    
+    smagorinsky_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': .5, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.07,
+        'id': 't_5_smg0.07_'
+    }
+    generate_case_set(smagorinsky_base_config, "smagorinsky")
+    
+    # --- 3. Generar casos con VREMAN ---
+    vreman_base_config = {
+        'NX': 33, 'NY': 33, 'P': 2, 'DT': 0.0001, 'TSIM': .5, 'NDUMP': 1000,
+        'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.15,
+        'id': 't_5_vrn0.15_'
+        
+    }
+    
+    generate_case_set(vreman_base_config, "vreman")
+
+    
+ 
+    
+       
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+ 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     print("\n=================================================")
     print("TODOS LOS ARCHIVOS HAN SIDO GENERADOS CON ÉXITO.")
-    print("Ahora puedes ejecutar tus simulaciones por directorios, por ejemplo:")
-    print("python fr-burgers-2d.py data/inputs/vreman/*.txt")
     print("=================================================")
