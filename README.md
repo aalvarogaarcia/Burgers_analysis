@@ -57,20 +57,23 @@ The operational procedure is structured into three sequential phases: case gener
 ### **1\. Test Case Generation**
 
 The generate\_cases.py script allows for the automated creation of configuration files (.txt) for a wide range of simulations, organizing them systematically into subdirectories.  
+```
 \# Execute from the project's root directory  
 python tools/generate\_cases.py
-
+```
 Executing this command will populate the data/inputs/ directory with subfolders such as no\_les\_stable/, smagorinsky/, and vreman/.
 
 ### **2\. Simulation Execution**
 
 The main solver, fr-burgers-2d.py, is designed to process both individual input files and batches of files. The results will be stored in the data/outputs/ directory, replicating the organizational structure of the input files.  
+```
 \# Execution of a single configuration file  
 python fr-burgers-2d.py data/inputs/vreman/FR\_TG\_Visc0.005.txt
-
+```
+```
 \# Execution of all cases in a directory (requires the use of quotes)  
 python fr-burgers-2d.py "data/inputs/smagorinsky/\*.txt"
-
+```
 The program has been endowed with robustness: in the event that a simulation exhibits numerical instability, the solver will save the last stable time step and proceed autonomously to the next case in the sequence.
 
 ### **3\. Results Analysis**
@@ -80,21 +83,24 @@ The tools/analysis/ directory contains a set of scripts for post-processing the 
 #### **Visualization of Physical Fields**
 
 The plot\_results.py script generates a graphical representation (.png) for each results file, illustrating the kinetic energy, vorticity, and velocity field.  
+```
 \# Analyze all results from the 'vreman' directory  
 python tools/analysis/plot\_results.py "data/outputs/vreman/\*.txt"
-
+```
 #### **Energy Spectrum Analysis**
 
 The compute\_spectrum.py script is responsible for calculating the kinetic energy spectrum, a quantitative tool that is indispensable in the study of turbulence.  
+```
 \# Generate the spectrum for a specific result  
 python tools/analysis/compute\_spectrum.py data/outputs/vreman/FR\_TG\_Visc0.005.txt
-
+```
 #### **Comparison of Temporal Statistics**
 
 The compute\_statistics.py script is oriented towards model comparison. It processes the results of multiple simulations to generate a unified graph showing the temporal evolution of kinetic energy for each case.  
+```
 \# Compare the energy evolution for the three implemented models  
 python tools/analysis/compute\_statistics.py "data/outputs/vreman/\*.txt" "data/outputs/smagorinsky/\*.txt" "data/outputs/no\_les\_stable/\*.txt"
-
+```
 ## **🔮 Future Research Directions**
 
 This project constitutes a solid foundation for future research and development. The priority lines of work that are contemplated are as follows:
