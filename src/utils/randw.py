@@ -163,7 +163,7 @@ def WriteFile_1D(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_
     outputfile.close()
     
 
-def WriteInputData_2D(document, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les=False, sgs_params=None):
+def WriteInputData_2D(document, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les=False, sgs_params=None, forcing_params=None):
     """
     Escribe la cabecera con los parámetros de entrada para una simulación 2D,
     usando tabuladores para alinear los valores.
@@ -190,7 +190,19 @@ def WriteInputData_2D(document, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, schem
         elif model_type == 'vreman':
             document.append(f"{'SGS_C_VREMAN':<20}{sgs_params.get('c_vreman', 0.07)}\n")
 
-def WriteFile_2D(filename, x, y, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les=False, sgs_params=None):
+
+    document.append(f"# --- Forcing Parameters ---\n")
+    use_forcing = forcing_params is not None and forcing_params.get('amplitude', 0) > 0
+    document.append(f"{'USE_FORCING':<20}{str(use_forcing).upper()}\n")
+    if use_forcing:
+        document.append(f"{'FORCING_K_MIN':<20}{forcing_params.get('k_min', 0.0):.1f}\n")
+        document.append(f"{'FORCING_K_MAX':<20}{forcing_params.get('k_max', 0.0):.1f}\n")
+        document.append(f"{'FORCING_AMPLITUDE':<20}{forcing_params.get('amplitude', 0.0):.4f}\n")
+
+
+
+
+def WriteFile_2D(filename, x, y, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les=False, sgs_params=None, forcing_params = None):
     """
     Escribe el archivo de solución para una simulación 2D.
     """
@@ -207,7 +219,7 @@ def WriteFile_2D(filename, x, y, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, s
 
     document = []
     # La llamada a la función ahora genera el nuevo formato
-    WriteInputData_2D(document, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+    WriteInputData_2D(document, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params, forcing_params)
     AddBlockData(document,"BEGIN_SOLUTION","END_SOLUTION",usol)
 
     with open(filename, 'w') as outputfile:

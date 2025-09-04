@@ -196,7 +196,7 @@ def calculate_gradients_2d(U, p, x_coords, y_coords, lagrange_data, Nx, Ny):
             dvdy[element_nodes_indices] = (deriv_v_eta * deta_dy).flatten()
     return dudx, dudy, dvdx, dvdy
 
-def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=False, sgs_params=None):
+def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=False, sgs_params=None, forcing_field = None):
     x_ho, y_ho = coords
     Lp_matrix, gp_array = lagrange_data
     num_nodes_per_var = len(U) // 2
@@ -296,6 +296,10 @@ def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=Fa
             R_u[nodes_slice] = - (div_F_u[nodes_slice] * dksi_dx + div_G_u[nodes_slice] * deta_dy)
             R_v[nodes_slice] = - (div_F_v[nodes_slice] * dksi_dx + div_G_v[nodes_slice] * deta_dy)
 
+    if forcing_field is not None:
+        R_u += forcing_field[:num_nodes_per_var]
+        R_v += forcing_field[num_nodes_per_var:]
+
     return np.concatenate((R_u, R_v))
 
 
@@ -377,10 +381,10 @@ def calculate_divergence_2d_dc(Fu, Gu, Fv, Gv, Nx, Ny, coords):
     return R_u.flatten(), R_v.flatten()
 
 # ==============================================================================
-# --- CÁLCULO DE DERIVADAS Y RESIDUOS ---
+# --- CÁLCULO DE DERIVADAS, RESIDUOS Y CAMPOS FORZANTES---
 # ==============================================================================
 
-def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params):
+def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params, forcing_field= None):
     """
     Calcula el residuo para las ecuaciones de Burgers 2D usando un esquema
     de Diferencias Centradas (DC) de segundo orden.
@@ -429,6 +433,12 @@ def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params):
     # 5. Calcular la divergencia de los flujos para obtener el residuo
     R_u, R_v = calculate_divergence_2d_dc(Fu, Gu, Fv, Gv, Nx, Ny, coords)
 
+    if forcing_field is not None:
+        num_nodes = Nx * Ny
+        R_u += forcing_field[:num_nodes]
+        R_v += forcing_field[num_nodes:]
+
+
     # 6. Combinar los residuos en un único vector de salida
     return np.concatenate((R_u, R_v))
 
@@ -438,7 +448,46 @@ def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params):
 
 
 
+def generate_forcing_field_2d(Nx, Ny, k_min, k_max, amplitude):
+    """
+    Genera un campo de forzamiento 2D estocástico en el espacio físico.
+    La energía se inyecta en una 'cáscara' específica en el espacio de Fourier.
+    """
+    # Crear la rejilla de números de onda
+    kx = np.fft.fftfreq(Nx, d=1.0 / Nx)
+    ky = np.fft.fftfreq(Ny, d=1.0 / Ny)
+    kx_grid, ky_grid = np.meshgrid(kx, ky, indexing='ij')
+    k_magnitude = np.sqrt(kx_grid**2 + ky_grid**2)
 
+    # Crear coeficientes de Fourier con fases aleatorias
+    forcing_hat_u = np.exp(2j * np.pi * np.random.rand(Ny, Nx))
+    forcing_hat_v = np.exp(2j * np.pi * np.random.rand(Ny, Nx))
+
+    # Aplicar un filtro para inyectar energía solo en la 'cáscara' deseada
+    mask = (k_magnitude >= k_min) & (k_magnitude <= k_max)
+    forcing_hat_u[~mask] = 0
+    forcing_hat_v[~mask] = 0
+    
+    # Asegurar que el forzamiento no tenga componente media (k=0)
+    forcing_hat_u[0, 0] = 0
+    forcing_hat_v[0, 0] = 0
+
+    # Transformar de vuelta al espacio físico
+    forcing_u = np.fft.ifft2(forcing_hat_u).real
+    forcing_v = np.fft.ifft2(forcing_hat_v).real
+
+    # Normalizar para alcanzar la amplitud (tasa de inyección de energía) deseada
+    # (Esta es una simplificación; una implementación rigurosa normalizaría la potencia)
+    power_u = np.sum(forcing_u**2)
+    power_v = np.sum(forcing_v**2)
+    
+    if power_u > 1e-12:
+        forcing_u *= amplitude / np.sqrt(power_u / (Nx*Ny))
+    if power_v > 1e-12:
+        forcing_v *= amplitude / np.sqrt(power_v / (Nx*Ny))
+        
+    # Devolver el campo aplanado para que coincida con el vector de estado U
+    return np.concatenate((forcing_u.flatten(), forcing_v.flatten()))
 
 
 

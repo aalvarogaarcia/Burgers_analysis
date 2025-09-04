@@ -45,14 +45,11 @@ def main(case_patterns):
     found_any_files = False
     
     for pattern in case_patterns:
-        # Busca archivos que coincidan con el patrón (ej. 'data/outputs/vreman/*.txt')
-        # Excluye los archivos _FAILED.txt
+        # Busca archivos que coincidan con el patrón
         filepaths = sorted([f for f in glob.glob(pattern) if '_FAILED' not in os.path.basename(f)])
         
-        # --- MEJORA: AÑADIR MENSAJES DE ESTADO ---
         if not filepaths:
             print(f"ADVERTENCIA: No se encontraron archivos para el patrón '{pattern}'.")
-            print("Verifica la ruta y asegúrate de que los archivos de resultados existen.")
             continue
             
         found_any_files = True
@@ -62,15 +59,17 @@ def main(case_patterns):
         total_kes = []
         
         # Extraer parámetros del primer archivo para calcular el tiempo
-        with open(filepaths[0], 'r') as f:
-            document = f.readlines()
-        dt = float(getValueFromLabel(document, "DT"))
-        ndump = int(getValueFromLabel(document, "NDUMP"))
+        try:
+            with open(filepaths[0], 'r') as f:
+                document = f.readlines()
+            dt = float(getValueFromLabel(document, "DT"))
+            ndump = int(getValueFromLabel(document, "NDUMP"))
+        except (IOError, ValueError, IndexError) as e:
+            print(f"  -> Error leyendo parámetros de {filepaths[0]}: {e}. Saltando este patrón.")
+            continue
         
-        # Iterar sobre todos los archivos de salida de una simulación
+        # Iterar sobre todos los archivos de salida
         for i, filepath in enumerate(filepaths):
-            # El tiempo de cada snapshot se calcula a partir del intervalo de guardado
-            # Asumimos que el primer guardado ocurre en la iteración NDUMP
             time = (i + 1) * ndump * dt
             ke = analyze_snapshot(filepath)
             
@@ -78,28 +77,43 @@ def main(case_patterns):
                 times.append(time)
                 total_kes.append(ke)
 
-        # Usar el nombre del directorio como etiqueta para el gráfico
-        case_label = filepath.split('/')[-1]
-        if not case_label: # Si el patrón es local (ej. *.txt)
-            case_label = os.path.basename(pattern).replace('*.txt', '')
-        plt.plot(times, total_kes, 'o-', label=case_label, markerfacecolor='None')
+        # --- MÉTODO DE ETIQUETADO MEJORADO ---
+        # Si solo hay un archivo, usa su nombre base.
+        if len(filepaths) == 1:
+            case_label = os.path.basename(filepaths[0]).replace('.txt', '')
+        # Si hay varios, encuentra el prefijo común entre ellos para la etiqueta.
+        else:
+            # Encuentra el prefijo común de los nombres de archivo
+            common_prefix = os.path.basename(os.path.commonprefix([os.path.basename(f) for f in filepaths]))
+            # Limpia la etiqueta eliminando caracteres extra al final
+            case_label = common_prefix.rstrip('._-')
+        
+        if not case_label: # Fallback por si no encuentra un prefijo
+            case_label = pattern
 
-    # Solo mostrar y guardar el gráfico si se procesó al menos un archivo
+        plt.plot(times, total_kes, 'o-', label=case_label, markerfacecolor='None', markersize=6)
+
+    # Configuración final del gráfico
     if found_any_files:
         plt.title('Evolución Temporal de la Energía Cinética Total')
         plt.xlabel('Tiempo (s)')
         plt.ylabel('Energía Cinética Total (Promedio)')
         plt.grid(True, which="both", ls="--")
-        plt.legend()
-        plt.yscale('log') # La escala logarítmica es ideal para ver el decaimiento
+        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left') # Mueve la leyenda fuera del gráfico
+        plt.yscale('log')
         
         output_filename = 'statistics_comparison.png'
+        # Ajusta el layout para que la leyenda no se corte
+        plt.tight_layout(rect=[0, 0, 0.85, 1])
         plt.savefig(output_filename, dpi=150)
         print(f"\n¡Éxito! Gráfico comparativo guardado en: {os.path.abspath(output_filename)}")
         plt.show()
     else:
         print("\nNo se procesó ningún archivo. No se ha generado ningún gráfico.")
-
+        
+        
+        
+        
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("\nUso: python compute_statistics.py \"ruta/caso1/*.txt\" \"ruta/caso2/*.txt\" ...")

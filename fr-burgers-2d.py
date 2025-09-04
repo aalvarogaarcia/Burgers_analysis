@@ -15,6 +15,8 @@ from sys import argv, exit
 
 from src.core.mesh import get_2d_cartesian_mesh, get_mesh_ho_2d
 from src.utils.misc import FillInitialSolution_2D
+from scipy.interpolate import griddata
+
 from src.utils.randw import getValueFromLabel, WriteFile_2D, WriteInputData
 from src.core.lagpol import getStandardElementData
 from src.core.ode import RK4
@@ -51,13 +53,23 @@ def Run(document, lab):
         elif sgs_params['model_type'] == 'smagorinsky':
             sgs_params['Cs'] = float(getValueFromLabel(document, "SGS_CS_CONSTANT"))
 
+
+    # Leer forcing values
+    use_forcing = getValueFromLabel(document, "USE_FORCING").upper() == "TRUE"
+    forcing_params = None
+    if use_forcing:
+        forcing_params = {
+            'k_min': float(getValueFromLabel(document, "FORCING_K_MIN")),
+            'k_max': float(getValueFromLabel(document, "FORCING_K_MAX")),
+            'amplitude': float(getValueFromLabel(document, "FORCING_AMPLITUDE"))
+        }
     # Configuración de la simulación
     Nmax = int(tsim / dt)
     if (Nmax * dt < tsim): Nmax += 1
     dt = tsim / Nmax
 
     simulation_completed = False
-    if scheme.lower() == "fr": 
+    if scheme.lower() == "fr":
     # --- Rama para Flux Reconstruction (FR) de alto orden ---
         print(f"INFO: Configurando simulación con esquema FR, Orden P={p}.")
     
@@ -65,7 +77,12 @@ def Run(document, lab):
         lobatto_points, Lp_matrix, gp_array = getStandardElementData(p)
         x_grid, y_grid = get_2d_cartesian_mesh(Nx, Ny)
         x_ho, y_ho = get_mesh_ho_2d(x_grid, y_grid, p, lobatto_points)
-    
+
+        if use_forcing:
+            xx_base, yy_base = np.meshgrid(x_grid, y_grid, indexing='ij')
+            source_points = np.vstack((xx_base.ravel(), yy_base.ravel())).T
+
+
         num_nodes = len(x_ho)
         U = np.zeros(2 * num_nodes)
         FillInitialSolution_2D(U, x_ho, y_ho, IniS, Nx, Ny, p, Nref)
@@ -74,21 +91,35 @@ def Run(document, lab):
         for it in range(Nmax):
         # Los argumentos son específicos para el residuo de FR
             U_last_stable = np.copy(U)
-            args_for_residual = (p, (x_ho, y_ho), v, (Lp_matrix, gp_array), Nx, Ny, use_les, sgs_params)
+
+            forcing_field_interpolated = None
+            if use_forcing:
+                # 1. Generar forzamiento en la rejilla simple
+                forcing_on_base_grid = generate_forcing_field_2d(Nx, Ny, **forcing_params)
+                forcing_u_base = forcing_on_base_grid[:Nx*Ny]
+                forcing_v_base = forcing_on_base_grid[Nx*Ny:]
+                
+                # 2. Interpolar a los nodos de alto orden
+                target_points = np.vstack((x_ho, y_ho)).T
+                forcing_u_ho = griddata(source_points, forcing_u_base, target_points, method='cubic', fill_value=0.0)
+                forcing_v_ho = griddata(source_points, forcing_v_base, target_points, method='cubic', fill_value=0.0)
+                forcing_field_interpolated = np.concatenate((forcing_u_ho, forcing_v_ho))
+
+            args_for_residual = (p, (x_ho, y_ho), v, (Lp_matrix, gp_array), Nx, Ny, use_les, sgs_params, forcing_field_interpolated)
             U = RK4(dt, U, get_residual_2d, *args_for_residual)
             
             if np.isnan(U).any():
                 print(f"¡ERROR! Inestabilidad numérica detectada en la iteración {it+1}.")
                 print(f"Guardando el último estado estable en t = {it*dt:.4f}.")
                 lab_failed = lab.replace('.out', '_FAILED.out')
-                WriteFile_2D(lab_failed, x_ho, y_ho, U_last_stable, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+                WriteFile_2D(lab_failed, x_ho, y_ho, U_last_stable, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params,forcing_params)
                 break
             
             current_time = (it + 1) * dt
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (FR)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme) 
+                WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, sgs_params, forcing_params) 
             
             
         else: 
@@ -116,8 +147,16 @@ def Run(document, lab):
     # Bucle temporal principal para DC
         for it in range(Nmax):
             U_last_stable = np.copy(U)
+
+
+            forcing_field = None
+            if use_forcing:
+                forcing_field = generate_forcing_field_2d(Nx, Ny, **forcing_params)
+
+
+
         # Los argumentos son más simples para el residuo de DC
-            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params)
+            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_field)
         # ¡¡IMPORTANTE: Llamamos a una nueva función de residuo!!
             U = RK4(dt, U, get_residual_2d_dc, *args_for_residual)
             
@@ -125,7 +164,7 @@ def Run(document, lab):
                 print(f"¡ERROR! Inestabilidad numérica detectada en la iteración {it+1}.")
                 print(f"Guardando el último estado estable en t = {it*dt:.4f}.")
                 lab_failed = lab.replace('.out', '_FAILED.out')
-                WriteFile_2D(lab_failed, x_coords_full, y_coords_full, U_last_stable, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+                WriteFile_2D(lab_failed, x_coords_full, y_coords_full, U_last_stable, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params, forcing_params)
                 break # Salir del bucle y continuar con el siguiente archivo
 
             
@@ -133,7 +172,7 @@ def Run(document, lab):
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (DC)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme)
+                WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, forcing_params)
 
         else: 
             simulation_completed = True
@@ -144,9 +183,9 @@ def Run(document, lab):
     if simulation_completed:
         print("Simulación completada con éxito. Guardando estado final.")
         if scheme.lower() == 'fr':
-            WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+            WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params, forcing_params)
         elif scheme.lower() == 'dc':
-            WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params)
+            WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params, forcing_params)
 
     
 # --- Bloque de ejecución principal ---
