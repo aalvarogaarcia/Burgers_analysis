@@ -86,7 +86,7 @@ def Run(document, lab):
         num_nodes = len(x_ho)
         U = np.zeros(2 * num_nodes)
         FillInitialSolution_2D(U, x_ho, y_ho, IniS, Nx, Ny, p, Nref)
-
+        snapshot_counter = 0
     # Bucle temporal principal para FR
         for it in range(Nmax):
         # Los argumentos son específicos para el residuo de FR
@@ -119,7 +119,9 @@ def Run(document, lab):
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (FR)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, sgs_params, forcing_params) 
+                snapshot_counter += 1
+                snapshot_lab = lab.replace('.txt', f'_snapshot_{snapshot_counter:04d}.txt')
+                WriteFile_2D(snapshot_lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, sgs_params, forcing_params) 
             
             
         else: 
@@ -145,6 +147,7 @@ def Run(document, lab):
         FillInitialSolution_2D(U, x_coords_full, y_coords_full, IniS, Nx, Ny, p_dc, Nref)
         
     # Bucle temporal principal para DC
+        snapshot_counter = 0
         for it in range(Nmax):
             U_last_stable = np.copy(U)
 
@@ -172,7 +175,9 @@ def Run(document, lab):
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (DC)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, forcing_params)
+                snapshot_counter += 1
+                snapshot_lab = lab.replace('.txt', f'_snapshot_{snapshot_counter:04d}.txt')
+                WriteFile_2D(snapshot_lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, forcing_params)
 
         else: 
             simulation_completed = True

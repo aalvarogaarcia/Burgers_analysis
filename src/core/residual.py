@@ -9,7 +9,7 @@ from ..models.sgs_model import *
 from ..models import sgs_model
 # Get the residual for the flux reconstruction scheme and the Burgers equation
 
-def getResidualBrurgersFR(p, U, x, v_molecular, Lp, gp, use_les=False, sgs_params=None): # <--- Nuevos argumentos
+def getResidualBrurgersFR(U, p, x, v_molecular, Lp, gp, use_les=False, sgs_params=None): # <--- Nuevos argumentos
     nnode = len(U)
     R = np.zeros(nnode)
     ncells = int(nnode / (p + 1))

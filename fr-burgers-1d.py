@@ -12,11 +12,14 @@ from src.core.mesh import *
 from src.utils.misc import *
 from src.utils.randw import *
 from src.core.lagpol import *
+from src.models.sgs_model import *
+from src.core.residual import *
 from sys import argv
 from sys import exit
 from src.core.ode import *
 import os
 import matplotlib.pyplot as plt
+import glob
 
 # Print the usage of the program
 def Usage():
@@ -110,11 +113,12 @@ def Run(document,lab):
     figure.canvas.flush_events()
 
     for it in range(0,Nmax):
-        U = RK4(dt,U,p,x,v,Lp,gLp,use_les_simulation, sgs_model_parameters)
+        args = (p,x,v,Lp,gLp,use_les_simulation, sgs_model_parameters)
+        U = RK4(dt,U, getResidualBrurgersFR, *args)
         print("it:",it,"t:",(it+1)*dt)
         
         if use_les_simulation and sgs_model_parameters['model_type'] == 'smagorinsky_dynamic':
-            Cd_current = sgs_model.get_last_calculated_Cd()
+            Cd_current = get_last_calculated_Cd()
             print(f"it: {it}, t: {(it+1)*dt:.4f}, Cd_dynamic: {Cd_current:.4e}")
 
         
@@ -123,9 +127,9 @@ def Run(document,lab):
             graph.set_ydata(U)
             figure.canvas.draw()
             figure.canvas.flush_events()
-            WriteFile(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
+            WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
     
-    WriteFile(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
+    WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
     graph.set_xdata(x)
     graph.set_ydata(U)
     figure.canvas.draw()
@@ -165,18 +169,37 @@ def Run(document,lab):
 #################################################################
 
 # Read the input file:
-Nargs=len(argv)
-if (Nargs<2):
-    Usage()
-    exit()
+
+if __name__ == "__main__":
+    Nargs=len(argv)
+    if (Nargs<2):
+        Usage()
+        exit()
+    
+    files_to_process = []
+    for arg in argv:
+        expand_files = glob.glob(arg)
+        
+        if not expand_files:
+            print(f"Aviso: No se encontraron archivos que coincidan con el patrón '{arg}'.")
+        
+        files_to_process.extend(expand_files)
+        
+    if not files_to_process:
+        print("Error: No se proporcionaron archivos de entrada válidos.")
+        Usage()
+        exit()
+        
+        
+    
 
 # Figure set-up
-figure, ax = plt.subplots(figsize=(10, 8))
+    figure, ax = plt.subplots(figsize=(10, 8))
 
-for ifile in range(1,len(argv)):
-    inputfile=open(argv[ifile],'r')
-    document = inputfile.readlines()
-    Run(document,argv[ifile])
-    inputfile.close()
+    for ifile in range(1,len(files_to_process)):
+        inputfile=open(files_to_process[ifile],'r')
+        document = inputfile.readlines()
+        Run(document,files_to_process[ifile])
+        inputfile.close()
 
-plt.show()
+    plt.show()
