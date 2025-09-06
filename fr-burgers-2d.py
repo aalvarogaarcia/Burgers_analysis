@@ -22,6 +22,8 @@ from src.core.lagpol import getStandardElementData
 from src.core.ode import RK4
 from src.core.residual import *
 import traceback
+import os
+import glob
 
 def Usage():
     print("Usage: fr-burgers-2d.py inputfilename")
@@ -107,6 +109,7 @@ def Run(document, lab):
 
             args_for_residual = (p, (x_ho, y_ho), v, (Lp_matrix, gp_array), Nx, Ny, use_les, sgs_params, forcing_field_interpolated)
             U = RK4(dt, U, get_residual_2d, *args_for_residual)
+            U = apply_modal_filter(U, p, strength=0.05)
             
             if np.isnan(U).any():
                 print(f"¡ERROR! Inestabilidad numérica detectada en la iteración {it+1}.")
@@ -159,7 +162,7 @@ def Run(document, lab):
 
 
         # Los argumentos son más simples para el residuo de DC
-            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_field)
+            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_params)
         # ¡¡IMPORTANTE: Llamamos a una nueva función de residuo!!
             U = RK4(dt, U, get_residual_2d_dc, *args_for_residual)
             
@@ -199,8 +202,12 @@ if len(argv) < 2:
     exit()
 
 inputfiles = argv[1:]
+text_4analysis = []
+for i in inputfiles:
+    text_4analysis.extend(glob.glob(i))
+
 try:
-    for path in inputfiles:
+    for path in text_4analysis:
         with open(path, 'r') as f:
             document = f.readlines()
         Run(document, path)

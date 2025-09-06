@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sys import argv
 from scipy.interpolate import griddata
+import glob
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from src.utils.randw import *
@@ -191,46 +192,57 @@ def plot_2d_results(ax1, ax2, x, y, u, v, resolution=200):
 # --- Bloque de Ejecución Principal (Universal) ---
 if __name__ == "__main__":
     if len(argv) < 2:
-        print("Usage: python postprocess.py <resultado1.txt> <resultado2.txt> ...")
-    
-    for i in range(1, len(argv)):
-        filepath = argv[i]
+        print("Uso: python postprocess.py 'patron/de/ficheros/*.txt'")
+        print("Ejemplo: python postprocess.py 'data/outputs/1d_dissipation_study/*.txt'")
+        sys.exit(1)
+
+    # --- 1. Usar glob para expandir los comodines y obtener la lista de archivos ---
+    files_to_process = []
+    for arg in argv[1:]:
+        # glob.glob encuentra todos los archivos que coinciden con el patrón
+        files_to_process.extend(glob.glob(arg))
+
+    if not files_to_process:
+        print(f"Error: No se encontraron archivos para el patrón '{' '.join(argv[1:])}'")
+        sys.exit(1)
+
+    # --- 2. Crear UNA SOLA figura y ejes ANTES de empezar el bucle ---
+    print(f"Superponiendo los resultados de {len(files_to_process)} archivo(s)...")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
+    fig.suptitle("Comparativa de Resultados 1D", fontsize=16)
+
+    # --- 3. Recorrer cada archivo y dibujar en los MISMOS ejes ---
+    for filepath in files_to_process:
         try:
             with open(filepath, 'r') as f:
                 document = f.readlines()
             
-            print(f"Procesando archivo: {filepath}")
-
-            # Detección automática del formato 1D vs 2D
+            # Detección de formato para asegurarse de que solo se procesan archivos 1D
             first_data_line = ReadBlockData(document, "BEGIN_SOLUTION", "END_SOLUTION")[0]
-            num_columns = len(first_data_line.split())
-            
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-            fig.suptitle(f"Resultados para '{filepath}'", fontsize=16)
-
-            if num_columns == 2:
-                print("Formato 1D detectado.")
-                x, u = get_mesh_and_solution_1d(document)
-                plot_1d_results(ax1, ax2, x, u, label=filepath)
-                
-            elif num_columns == 4:
-                print("Formato 2D detectado.")
-                x, y, u, v = get_mesh_and_solution_2d(document)
-                im1, im2 = plot_2d_results(ax1, ax2, x, y, u, v)
-                fig.colorbar(im1, ax=ax1, orientation='vertical', fraction=0.046, pad=0.04)
-                fig.colorbar(im2, ax=ax2, orientation='vertical', fraction=0.046, pad=0.04)
-
-            else:
-                print(f"Error: Formato de archivo no reconocido en '{filepath}' con {num_columns} columnas.")
-                plt.close(fig) # Cerramos la figura vacía
+            if len(first_data_line.split()) != 2:
+                print(f"Aviso: Se omite el archivo '{os.path.basename(filepath)}' por no ser de formato 1D.")
                 continue
-            
-            plt.tight_layout(rect=[0, 0, 1, 0.96])
 
-        except FileNotFoundError:
-            print(f"Error: No se pudo encontrar el archivo {filepath}")
+            print(f"Procesando y superponiendo: {os.path.basename(filepath)}")
+            
+            # Extraer datos del archivo
+            x, u = get_mesh_and_solution_1d(document)
+            
+            # Crear una etiqueta limpia para la leyenda del gráfico
+            label = os.path.basename(filepath).replace('.txt', '').replace('_', ' ')
+            
+            # Dibujar en los ejes ya existentes
+            # (asumiendo que plot_1d_results dibuja en ax1 y ax2)
+            plot_1d_results(ax1, ax2, x, u, label=label)
+
         except Exception as e:
             print(f"Ocurrió un error procesando {filepath}: {e}")
 
-    if len(argv) > 1:
-        plt.show()
+    # --- 4. Finalizar y mostrar el gráfico DESPUÉS de haber procesado todos los archivos ---
+    ax1.legend()
+    ax1.grid(True, linestyle='--', alpha=0.6)
+    ax2.legend()
+    ax2.grid(True, linestyle='--', alpha=0.6)
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()

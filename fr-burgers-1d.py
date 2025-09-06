@@ -47,10 +47,31 @@ def Run(document,lab):
     p      = int(getValueFromLabel(document,"P"))
     v      = float(getValueFromLabel(document,"VISC"))
     Nref   = int(getValueFromLabel(document,"NREF"))
+    scheme = str(getValueFromLabel(document,"SCHEME")).lower()
     IniS   = getValueFromLabel(document,"INISOL")
     dt     = float(getValueFromLabel(document,"DT"))
     tsim   = float(getValueFromLabel(document,"TSIM"))
     Ndump  = int(getValueFromLabel(document,"NDUMP"))
+    
+    residual_func = None
+    x = get_mesh_1d(N, Nref)
+
+    if scheme == 'fr':
+        print(f"Configurando para el esquema: FR (P={p})")
+        residual_func = getResidualBrurgersFR
+        # Nota: los parámetros LES solo son compatibles con FR por ahora
+    elif scheme in ['dc', 'upwind']:
+        print(f"Configurando para el esquema de bajo orden: {scheme.upper()}")
+        U = np.zeros(N)
+        dx = x[1] - x[0] # Asumimos malla uniforme
+        if scheme == 'dc':
+            residual_func = get_residual_dc_1d
+            
+        else: # upwind
+            residual_func = get_residual_upwind_1d
+            
+    else:
+        raise ValueError(f"Esquema '{scheme}' no reconocido. Use 'FR', 'DC' o 'UPWIND'.")
     
     # --- Leer parámetros LES ---
     use_les_str = getValueFromLabel(document, "USE_LES")
@@ -89,14 +110,12 @@ def Run(document,lab):
         Nmax += 1
     dt = tsim / Nmax
 
-    # Create the mesh
-    x = get_mesh_1d(N,Nref)
-
-    # Get the local element coordinates and derivatives of polynomials
-    lobattoPoints,Lp,gLp = getStandardElementData(p)
-
+    
     # Get the high-order mesh
-    x = get_mesh_ho_1d(x,lobattoPoints)
+    if scheme == 'fr':
+        # Get the local element coordinates and derivatives of polynomials
+        lobattoPoints,Lp,gLp = getStandardElementData(p)
+        x = get_mesh_ho_1d(x,lobattoPoints)
 
     nnode = len(x)
 
@@ -113,8 +132,13 @@ def Run(document,lab):
     figure.canvas.flush_events()
 
     for it in range(0,Nmax):
-        args = (p,x,v,Lp,gLp,use_les_simulation, sgs_model_parameters)
-        U = RK4(dt,U, getResidualBrurgersFR, *args)
+        if scheme == 'fr':
+            residual_args = (p,x,v,Lp,gLp,use_les_simulation, sgs_model_parameters)
+        else:
+            residual_args = (x, dx, v, use_les_simulation, sgs_model_parameters)
+            
+            
+        U = RK4(dt,U, residual_func, *residual_args)
         print("it:",it,"t:",(it+1)*dt)
         
         if use_les_simulation and sgs_model_parameters['model_type'] == 'smagorinsky_dynamic':
@@ -127,9 +151,9 @@ def Run(document,lab):
             graph.set_ydata(U)
             figure.canvas.draw()
             figure.canvas.flush_events()
-            WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
+            WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, scheme, use_les_simulation, sgs_model_parameters)
     
-    WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les_simulation, sgs_model_parameters)
+    WriteFile_1D(lab,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, scheme, use_les_simulation, sgs_model_parameters)
     graph.set_xdata(x)
     graph.set_ydata(U)
     figure.canvas.draw()

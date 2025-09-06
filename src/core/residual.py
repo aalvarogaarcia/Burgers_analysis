@@ -168,32 +168,115 @@ def getResidualBrurgersFR(U, p, x, v_molecular, Lp, gp, use_les=False, sgs_param
             
     return R
 
+# ==============================================================================
+#  FUNCIÓN PARA DIFERENCIAS CENTRADAS (DC) - VERSIÓN COMPLETA
+# ==============================================================================
+def get_residual_dc_1d(U, N, dx, v_molecular, use_les=False, sgs_params=None):
+    """
+    Calcula el residuo para Burgers 1D con Diferencias Centradas de 2º orden.
+    Esta versión incluye la lógica para añadir viscosidad de un modelo SGS.
+    """
+    # --- 1. Calcular la viscosidad total ---
+    v_total = v_molecular
+    if use_les and sgs_params is not None:
+        # Para los modelos de bajo orden, necesitamos el gradiente de la velocidad.
+        # Lo calculamos también con diferencias centradas.
+        dudx = (np.roll(U, -1) - np.roll(U, 1)) / (2 * dx)
+        
+        # Llamamos a una función genérica en sgs_model para obtener la viscosidad SGS
+        # (Esta función necesita ser creada o adaptada en sgs_model.py)
+        v_sgs = sgs_model.calculate_sgs_viscosity_1d(U, dudx, dx, sgs_params)
+        v_total = v_molecular + v_sgs
+
+    # --- 2. Calcular los términos del residuo usando la viscosidad total ---
+    # Término convectivo (no cambia)
+    flux_conv = 0.5 * U**2
+    d_flux_conv_dx = (np.roll(flux_conv, -1) - np.roll(flux_conv, 1)) / (2 * dx)
+    
+    # Término viscoso (ahora usa v_total)
+    laplacian_U = (np.roll(U, -1) - 2 * U + np.roll(U, 1)) / dx**2
+    
+    R = -d_flux_conv_dx + v_total * laplacian_U
+    
+    return R
+
+# ==============================================================================
+#  FUNCIÓN PARA UPWIND DE PRIMER ORDEN - VERSIÓN COMPLETA
+# ==============================================================================
+def get_residual_upwind_1d(U, N, dx, v_molecular, use_les=False, sgs_params=None):
+    """
+    Calcula el residuo para Burgers 1D con un esquema Upwind de 1er orden.
+    Esta versión incluye la lógica para añadir un término viscoso explícito.
+    """
+    # --- 1. Calcular el término convectivo con la lógica Upwind ---
+    U_left = np.roll(U, 1)
+    U_right = np.roll(U, -1)
+    flux_left = np.where(U_left >= 0, 0.5 * U_left**2, 0.5 * U**2)
+    flux_right = np.where(U >= 0, 0.5 * U**2, 0.5 * U_right**2)
+    
+    residual_conv = -(flux_right - flux_left) / dx
+
+    # --- 2. Calcular el término viscoso (siempre se usa DC para el Laplaciano) ---
+    # La parte viscosa no tiene "dirección", por lo que se usa una aproximación centrada.
+    v_total = v_molecular
+    if use_les and sgs_params is not None:
+        # El gradiente se podría calcular con upwind o centrado.
+        # Usar centrado es más estándar para calcular la producción de turbulencia.
+        dudx = (np.roll(U, -1) - np.roll(U, 1)) / (2 * dx)
+        v_sgs = sgs_model.calculate_sgs_viscosity_1d(U, dudx, dx, sgs_params)
+        v_total = v_molecular + v_sgs
+
+    laplacian_U = (np.roll(U, -1) - 2 * U + np.roll(U, 1)) / dx**2
+    residual_visc = v_total * laplacian_U
+
+    # --- 3. Combinar ambos términos ---
+    R = residual_conv + residual_visc
+    
+    return R
+
+
 
 def calculate_gradients_2d(U, p, x_coords, y_coords, lagrange_data, Nx, Ny):
     num_nodes_per_var = len(U) // 2
     u, v = U[:num_nodes_per_var], U[num_nodes_per_var:]
-    Lp_matrix, gp_array = lagrange_data
+    Lp_matrix, _ = lagrange_data
     num_elements_x, num_elements_y = Nx - 1, Ny - 1
     nodes_per_element_1d = p + 1
     dudx, dudy = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
     dvdx, dvdy = np.zeros(num_nodes_per_var), np.zeros(num_nodes_per_var)
 
+    dksi_dx = 2.0 / (x_coords[1] - x_coords[0]) if (x_coords[1] - x_coords[0]) != 0 else 0
+    deta_dy = 2.0 / (y_coords[Nx] - y_coords[0]) if (y_coords[Nx] - y_coords[0]) != 0 else 0
+    
+    Nx_total = num_elements_x * nodes_per_element_1d
+    Ny_total = num_elements_y * nodes_per_element_1d
+
     for j_elem in range(num_elements_y):
         for i_elem in range(num_elements_x):
-            base_idx = (j_elem * num_elements_x + i_elem) * (nodes_per_element_1d**2)
-            element_nodes_indices = [base_idx + l * nodes_per_element_1d + m for l in range(nodes_per_element_1d) for m in range(nodes_per_element_1d)]
-            u_element = u[element_nodes_indices].reshape((nodes_per_element_1d, nodes_per_element_1d))
-            v_element = v[element_nodes_indices].reshape((nodes_per_element_1d, nodes_per_element_1d))
-            deriv_u_ksi, deriv_v_ksi = u_element @ Lp_matrix.T, v_element @ Lp_matrix.T
-            deriv_u_eta, deriv_v_eta = Lp_matrix @ u_element, Lp_matrix @ v_element
-            idx_sw, idx_se = element_nodes_indices[0], element_nodes_indices[p]
-            idx_nw = element_nodes_indices[p * nodes_per_element_1d]
-            dx, dy = x_coords[idx_se] - x_coords[idx_sw], y_coords[idx_nw] - y_coords[idx_sw]
-            dksi_dx, deta_dy = (2.0 / dx if dx != 0 else 0), (2.0 / dy if dy != 0 else 0)
-            dudx[element_nodes_indices] = (deriv_u_ksi * dksi_dx).flatten()
-            dudy[element_nodes_indices] = (deriv_u_eta * deta_dy).flatten()
-            dvdx[element_nodes_indices] = (deriv_v_ksi * dksi_dx).flatten()
-            dvdy[element_nodes_indices] = (deriv_v_eta * deta_dy).flatten()
+            element_nodes_indices = np.zeros((nodes_per_element_1d, nodes_per_element_1d), dtype=int)
+            for m_node in range(nodes_per_element_1d):  # y-local
+                for l_node in range(nodes_per_element_1d):  # x-local
+                    i_global = i_elem * nodes_per_element_1d + l_node
+                    j_global = j_elem * nodes_per_element_1d + m_node
+                    element_nodes_indices[m_node, l_node] = j_global * Nx_total + i_global
+            
+            flat_indices = element_nodes_indices.flatten()
+            # Extraer los datos del elemento y darles forma de matriz
+            u_element = u[flat_indices].reshape((nodes_per_element_1d, nodes_per_element_1d))
+            v_element = v[flat_indices].reshape((nodes_per_element_1d, nodes_per_element_1d))
+
+            # Calcular derivadas en el espacio de referencia (ksi, eta)
+            # Se usa Lp_matrix
+            deriv_u_ksi = u_element @ Lp_matrix.T
+            deriv_u_eta = Lp_matrix @ u_element
+            deriv_v_ksi = v_element @ Lp_matrix.T
+            deriv_v_eta = Lp_matrix @ v_element
+
+            # Mapear derivadas al espacio físico y guardarlas en los arrays de salida
+            dudx[flat_indices] = (deriv_u_ksi * dksi_dx).flatten()
+            dudy[flat_indices] = (deriv_u_eta * deta_dy).flatten()
+            dvdx[flat_indices] = (deriv_v_ksi * dksi_dx).flatten()
+            dvdy[flat_indices] = (deriv_v_eta * deta_dy).flatten()
     return dudx, dudy, dvdx, dvdy
 
 def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=False, sgs_params=None, forcing_field = None):
@@ -443,7 +526,25 @@ def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params, forc
     return np.concatenate((R_u, R_v))
 
 
-
+def apply_modal_filter(U, p, strength=0.05):
+    """
+    Filtro modal exponencial para suavizar modos altos en cada elemento.
+    """
+    nodes_per_element_1d = p + 1
+    n_elem = len(U) // nodes_per_element_1d
+    U_filtered = np.copy(U)
+    for i in range(n_elem):
+        idx0 = i * nodes_per_element_1d
+        idx1 = (i + 1) * nodes_per_element_1d
+        u_elem = U[idx0:idx1]
+        # Transformada discreta de coseno (DCT) para obtener modos
+        u_modes = np.fft.fft(u_elem)
+        for k in range(nodes_per_element_1d):
+            sigma = np.exp(-strength * (k / (nodes_per_element_1d - 1))**8)
+            u_modes[k] *= sigma
+        u_filtered = np.fft.ifft(u_modes).real
+        U_filtered[idx0:idx1] = u_filtered
+    return U_filtered
 
 
 

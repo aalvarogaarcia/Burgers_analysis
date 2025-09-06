@@ -72,6 +72,7 @@ def FillInitialSolution_1D(U,x,IniS,Np,p,Nref):
         Nd     = int(getValueFromLabel(document,"N"))
         pd     = int(getValueFromLabel(document,"P"))
         Nrefd  = int(getValueFromLabel(document,"NREF"))
+        
         if (Nd != Np or pd != p or Nrefd != Nref):
             print("Initial solution not compatible with current parameters")
             exit()
