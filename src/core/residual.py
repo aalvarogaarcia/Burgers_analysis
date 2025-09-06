@@ -492,15 +492,16 @@ def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params, forc
     # 2. Calcular viscosidad turbulenta (LES) si está activado
     nu_e = np.zeros(num_nodes_per_var)
     if use_les and sgs_params:
-        model_type = sgs_params.get('model_type')
-        if model_type == 'vreman':
+        # Obtener el tipo de modelo y convertirlo a mayúsculas para la comparación
+        model_type = sgs_params.get('model_type', '').upper()
+        
+        if model_type == 'VREMAN':
             c_vreman = sgs_params.get('c_vreman', 0.07)
             nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, Nx, Ny, c_vreman)
-        elif model_type == 'smagorinsky':
+        elif model_type == 'SMAGORINSKY':
             Cs = sgs_params.get('Cs', 0.1)
-            # Para DC, p=0, ya que no hay polinomios de alto orden
-            nu_e = sgs_model.calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, 0, Nx, Ny, Cs)
-            
+            nu_e = sgs_model.calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, 0, Nx, Ny, Cs)  
+                      
     # 3. Calcular el tensor de estrés total (molecular + SGS)
     total_viscosity = v_molecular + nu_e
     tau_xx = 2 * total_viscosity * dudx
