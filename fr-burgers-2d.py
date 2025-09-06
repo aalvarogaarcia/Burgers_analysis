@@ -49,9 +49,9 @@ def Run(document, lab):
     use_les = getValueFromLabel(document, "USE_LES").upper() == "TRUE"
     sgs_params = None
     if use_les:
-        sgs_params = {'model_type': getValueFromLabel(document, "SGS_MODEL_TYPE")}
+        sgs_params = {'model_type': getValueFromLabel(document, "SGS_MODEL_TYPE").lower()}
         if sgs_params['model_type'] == 'vreman':
-            sgs_params['c_vreman'] = float(getValueFromLabel(document, "SGS_C_VREMAN"))
+            sgs_params['c_vreman'] = float(getValueFromLabel(document, "SGS_C_VREMAN").lower())
         elif sgs_params['model_type'] == 'smagorinsky':
             sgs_params['Cs'] = float(getValueFromLabel(document, "SGS_CS_CONSTANT"))
 
@@ -162,7 +162,7 @@ def Run(document, lab):
 
 
         # Los argumentos son más simples para el residuo de DC
-            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_field)
+            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_params)
         # ¡¡IMPORTANTE: Llamamos a una nueva función de residuo!!
             U = RK4(dt, U, get_residual_2d_dc, *args_for_residual)
             

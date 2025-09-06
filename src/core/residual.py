@@ -55,7 +55,7 @@ def getResidualBrurgersFR(U, p, x, v_molecular, Lp, gp, use_les=False, sgs_param
     F_sgs = np.zeros(nnode) # Inicializar flujo SGS
     if use_les and sgs_params is not None:
         sgs_model_type = sgs_params.get('model_type', 'smagorinsky_dynamic')
-        if sgs_model_type == 'smagorinsky_dynamic':
+        if sgs_model_type.lower() == 'smagorinsky_dynamic':
             # Calcular Cd dinámicamente
             # Lp y gp se pasan porque la función en sgs_model.py los necesita para calcular derivadas internas
             # si no se pasa dudx directamente.
@@ -289,7 +289,7 @@ def get_residual_2d(U, p, coords, v_molecular, lagrange_data, Nx, Ny, use_les=Fa
     
     nu_e = np.zeros(num_nodes_per_var)
     if use_les and sgs_params:
-        model_type = sgs_params.get('model_type')
+        model_type = sgs_params.get('model_type').lower()
         if model_type == 'vreman':
             c_vreman = sgs_params.get('c_vreman', 0.07)
             nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, Nx, Ny, c_vreman)
