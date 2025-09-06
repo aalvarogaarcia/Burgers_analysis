@@ -22,6 +22,8 @@ from src.core.lagpol import getStandardElementData
 from src.core.ode import RK4
 from src.core.residual import *
 import traceback
+import os
+import glob
 
 def Usage():
     print("Usage: fr-burgers-2d.py inputfilename")
@@ -86,7 +88,7 @@ def Run(document, lab):
         num_nodes = len(x_ho)
         U = np.zeros(2 * num_nodes)
         FillInitialSolution_2D(U, x_ho, y_ho, IniS, Nx, Ny, p, Nref)
-
+        snapshot_counter = 0
     # Bucle temporal principal para FR
         for it in range(Nmax):
         # Los argumentos son específicos para el residuo de FR
@@ -107,6 +109,7 @@ def Run(document, lab):
 
             args_for_residual = (p, (x_ho, y_ho), v, (Lp_matrix, gp_array), Nx, Ny, use_les, sgs_params, forcing_field_interpolated)
             U = RK4(dt, U, get_residual_2d, *args_for_residual)
+            U = apply_modal_filter(U, p, strength=0.05)
             
             if np.isnan(U).any():
                 print(f"¡ERROR! Inestabilidad numérica detectada en la iteración {it+1}.")
@@ -119,7 +122,9 @@ def Run(document, lab):
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (FR)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, sgs_params, forcing_params) 
+                snapshot_counter += 1
+                snapshot_lab = lab.replace('.txt', f'_snapshot_{snapshot_counter:04d}.txt')
+                WriteFile_2D(snapshot_lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, sgs_params, forcing_params) 
             
             
         else: 
@@ -145,6 +150,7 @@ def Run(document, lab):
         FillInitialSolution_2D(U, x_coords_full, y_coords_full, IniS, Nx, Ny, p_dc, Nref)
         
     # Bucle temporal principal para DC
+        snapshot_counter = 0
         for it in range(Nmax):
             U_last_stable = np.copy(U)
 
@@ -156,7 +162,7 @@ def Run(document, lab):
 
 
         # Los argumentos son más simples para el residuo de DC
-            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_field)
+            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_params)
         # ¡¡IMPORTANTE: Llamamos a una nueva función de residuo!!
             U = RK4(dt, U, get_residual_2d_dc, *args_for_residual)
             
@@ -172,7 +178,9 @@ def Run(document, lab):
             print(f"it: {it+1}/{Nmax}, t: {current_time:.4f} (DC)")
 
             if (it + 1) % Ndump == 0:
-                WriteFile_2D(lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, forcing_params)
+                snapshot_counter += 1
+                snapshot_lab = lab.replace('.txt', f'_snapshot_{snapshot_counter:04d}.txt')
+                WriteFile_2D(snapshot_lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, forcing_params)
 
         else: 
             simulation_completed = True
@@ -194,8 +202,12 @@ if len(argv) < 2:
     exit()
 
 inputfiles = argv[1:]
+text_4analysis = []
+for i in inputfiles:
+    text_4analysis.extend(glob.glob(i))
+
 try:
-    for path in inputfiles:
+    for path in text_4analysis:
         with open(path, 'r') as f:
             document = f.readlines()
         Run(document, path)

@@ -97,7 +97,7 @@ def AddSingleDataExp(document,label,value):
 
 
 # Write the input data of the simulation:
-def WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_params=None, Nx=None, Ny=None):
+def WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, scheme,  use_les=False, sgs_params=None, Nx=None, Ny=None):
     newLine = "# Input file for fr-burgers-turbulent.py program\n"
     document.append(newLine)
 
@@ -125,6 +125,8 @@ def WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_pa
     document.append(newLine)
     newLine="NDUMP  " + '%15i' % Ndump + " # Interval of iterations to dump a solution\n"
     document.append(newLine)
+    newLine="SCHEME " + '%15s' % scheme.upper() + " # Numerical scheme: FR, DC, UPWIND\n"
+    document.append(newLine)
     
     # Escribir parámetros LES si se usan
     document.append("# --- LES Parameters ---\n")
@@ -142,7 +144,7 @@ def WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_pa
     document.append("\n")
 
 # Write the solution file
-def WriteFile_1D(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_params=None):
+def WriteFile_1D(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, scheme, use_les=False, sgs_params=None):
     print("Dumping solution ....")
     nnode = len(x)
     # Few postprocess of the solution
@@ -154,7 +156,7 @@ def WriteFile_1D(filename,x,U,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les=False, sgs_
 
     # Write the results
     document = []
-    WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump, use_les, sgs_params)
+    WriteInputData(document,N,p,v,Nref,IniS,dt,tsim,Ndump,scheme, use_les, sgs_params)
     AddBlockData(document,"BEGIN_SOLUTION","END_SOLUTION",usol)
 
     #Finally, write the document

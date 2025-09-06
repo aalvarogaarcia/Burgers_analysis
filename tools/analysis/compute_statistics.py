@@ -4,121 +4,120 @@ import matplotlib.pyplot as plt
 import sys
 import os
 import glob
+from collections import defaultdict
 
-# Añade la ruta al directorio raíz del proyecto para poder importar desde 'src'
+# Añade la ruta al directorio raíz del proyecto
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from src.utils.randw import getValueFromLabel, ReadBlockData
 
 def analyze_snapshot(filepath):
-    """Analiza un único archivo y devuelve la energía cinética total."""
+    """Analiza un único archivo de snapshot y devuelve la energía cinética total."""
     try:
         with open(filepath, 'r') as f:
             document = f.readlines()
             
         data_lines = ReadBlockData(document, "BEGIN_SOLUTION", "END_SOLUTION")
         if not data_lines:
-            print(f"  -> Advertencia: No se encontró bloque de solución en {os.path.basename(filepath)}")
-            return None
+            return None, None
         
         data = np.loadtxt(data_lines)
         u, v = data[:, 2], data[:, 3]
         
-        # Ignorar valores no finitos que provienen de inestabilidades
         valid_mask = np.isfinite(u) & np.isfinite(v)
         if np.sum(valid_mask) == 0:
-            print(f"  -> Advertencia: Todos los datos en {os.path.basename(filepath)} son inválidos (NaN/inf).")
-            return None
+            return None, None
 
-        # La energía cinética total es el promedio de 0.5 * (u^2 + v^2)
         total_ke = 0.5 * np.mean(u[valid_mask]**2 + v[valid_mask]**2)
-        return total_ke
-    except Exception as e:
-        print(f"  -> Error procesando {os.path.basename(filepath)}: {e}")
-        return None
+        
+        # Extraer parámetros para el etiquetado
+        scheme = getValueFromLabel(document, "SCHEME")
+        p_order = getValueFromLabel(document, "P")
+        visc = float(getValueFromLabel(document, "VISC"))
+        
+        label = f"{scheme.upper()}-P{p_order} Visc={visc}"
+        
+        return total_ke, label
+        
+    except Exception:
+        return None, None
 
 def main(case_patterns):
     """
-    Procesa múltiples patrones de casos (directorios) y los grafica juntos
-    para comparar la evolución de la energía cinética.
+    Procesa múltiples directorios de casos, los agrupa por modelo y los grafica
+    en subplots separados para una comparación de estilo académico.
     """
-    plt.figure(figsize=(12, 8))
-    found_any_files = False
+    all_results = defaultdict(list)
     
+    # --- 1. Recopilar y agrupar todos los datos ---
     for pattern in case_patterns:
-        # Busca archivos que coincidan con el patrón
         filepaths = sorted([f for f in glob.glob(pattern) if '_FAILED' not in os.path.basename(f)])
-        
         if not filepaths:
             print(f"ADVERTENCIA: No se encontraron archivos para el patrón '{pattern}'.")
             continue
             
-        found_any_files = True
         print(f"Procesando {len(filepaths)} archivos para el caso: '{pattern}'")
         
-        times = []
-        total_kes = []
+        # Extraer el nombre base del modelo del patrón (ej. 'vreman', 'smagorinsky')
+        model_name = os.path.basename(os.path.dirname(pattern)).capitalize()
+        if not model_name: # Fallback si el patrón es local
+            model_name = "Resultados"
+
+        with open(filepaths[0], 'r') as f:
+            document = f.readlines()
+        dt = float(getValueFromLabel(document, "DT"))
+        ndump = int(getValueFromLabel(document, "NDUMP"))
         
-        # Extraer parámetros del primer archivo para calcular el tiempo
-        try:
-            with open(filepaths[0], 'r') as f:
-                document = f.readlines()
-            dt = float(getValueFromLabel(document, "DT"))
-            ndump = int(getValueFromLabel(document, "NDUMP"))
-        except (IOError, ValueError, IndexError) as e:
-            print(f"  -> Error leyendo parámetros de {filepaths[0]}: {e}. Saltando este patrón.")
-            continue
-        
-        # Iterar sobre todos los archivos de salida
+        case_series = defaultdict(lambda: {'times': [], 'kes': []})
+
         for i, filepath in enumerate(filepaths):
             time = (i + 1) * ndump * dt
-            ke = analyze_snapshot(filepath)
+            ke, label = analyze_snapshot(filepath)
             
-            if ke is not None:
-                times.append(time)
-                total_kes.append(ke)
-
-        # --- MÉTODO DE ETIQUETADO MEJORADO ---
-        # Si solo hay un archivo, usa su nombre base.
-        if len(filepaths) == 1:
-            case_label = os.path.basename(filepaths[0]).replace('.txt', '')
-        # Si hay varios, encuentra el prefijo común entre ellos para la etiqueta.
-        else:
-            # Encuentra el prefijo común de los nombres de archivo
-            common_prefix = os.path.basename(os.path.commonprefix([os.path.basename(f) for f in filepaths]))
-            # Limpia la etiqueta eliminando caracteres extra al final
-            case_label = common_prefix.rstrip('._-')
+            if ke is not None and label is not None:
+                case_series[label]['times'].append(time)
+                case_series[label]['kes'].append(ke)
         
-        if not case_label: # Fallback por si no encuentra un prefijo
-            case_label = pattern
+        for label, data in case_series.items():
+            all_results[model_name].append({'label': label, 'data': data})
 
-        plt.plot(times, total_kes, 'o-', label=case_label, markerfacecolor='None', markersize=6)
-
-    # Configuración final del gráfico
-    if found_any_files:
-        plt.title('Evolución Temporal de la Energía Cinética Total')
-        plt.xlabel('Tiempo (s)')
-        plt.ylabel('Energía Cinética Total (Promedio)')
-        plt.grid(True, which="both", ls="--")
-        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left') # Mueve la leyenda fuera del gráfico
-        plt.yscale('log')
-        
-        output_filename = 'statistics_comparison.png'
-        # Ajusta el layout para que la leyenda no se corte
-        plt.tight_layout(rect=[0, 0, 0.85, 1])
-        plt.savefig(output_filename, dpi=150)
-        print(f"\n¡Éxito! Gráfico comparativo guardado en: {os.path.abspath(output_filename)}")
-        plt.show()
-    else:
+    if not all_results:
         print("\nNo se procesó ningún archivo. No se ha generado ningún gráfico.")
+        return
+
+    # --- 2. Crear los subplots ---
+    num_models = len(all_results)
+    fig, axes = plt.subplots(num_models, 1, figsize=(10, 6 * num_models), sharex=True, squeeze=False)
+    axes = axes.flatten() # Asegurarse de que axes es un array 1D
+
+    fig.suptitle('Evolución Temporal de la Energía Cinética por Modelo', fontsize=16)
+
+    model_list = sorted(all_results.keys())
+
+    for i, model_name in enumerate(model_list):
+        ax = axes[i]
+        for result in all_results[model_name]:
+            ax.plot(result['data']['times'], result['data']['kes'], 'o-', 
+                    label=result['label'], markerfacecolor='white', markersize=6)
         
-        
-        
-        
+        ax.set_title(f"Modelo: {model_name}", fontsize=12)
+        ax.set_ylabel('Energía Cinética Total')
+        ax.grid(True, which="both", ls="--", linewidth=0.5)
+        ax.legend()
+        ax.set_yscale('log')
+
+    axes[-1].set_xlabel('Tiempo (s)')
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    
+    output_filename = 'statistics_comparison.png'
+    plt.savefig(output_filename, dpi=150)
+    print(f"\n¡Éxito! Gráfico comparativo guardado en: {os.path.abspath(output_filename)}")
+    plt.show()
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("\nUso: python compute_statistics.py \"ruta/caso1/*.txt\" \"ruta/caso2/*.txt\" ...")
-        print("\nEjemplo desde la carpeta raíz del proyecto:")
-        print("python tools/analysis/compute_statistics.py \"data/outputs/vreman/*.txt\" \"data/outputs/smagorinsky/*.txt\" \"data/outputs/no_les/*.txt\"")
+        print("\nEjemplo desde la raíz del proyecto:")
+        print("python tools/analysis/compute_statistics.py \"data/outputs/vreman/*.txt\" \"data/outputs/smagorinsky/*.txt\"")
         print("\nIMPORTANTE: ¡Usa comillas dobles alrededor de cada ruta!")
         sys.exit(1)
     main(sys.argv[1:])
