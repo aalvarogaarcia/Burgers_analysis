@@ -162,7 +162,7 @@ def Run(document, lab):
 
 
         # Los argumentos son más simples para el residuo de DC
-            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_params)
+            args_for_residual = ((x_coords_full, y_coords_full), v, Nx, Ny, use_les, sgs_params, forcing_field)
         # ¡¡IMPORTANTE: Llamamos a una nueva función de residuo!!
             U = RK4(dt, U, get_residual_2d_dc, *args_for_residual)
             

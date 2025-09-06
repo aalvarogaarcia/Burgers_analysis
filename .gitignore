@@ -10,4 +10,4 @@ ipynb_checkpoints/
 *.pyd
 __pycache__/
 *.so
-
+*.png
