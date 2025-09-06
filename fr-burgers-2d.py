@@ -212,7 +212,7 @@ try:
             document = f.readlines()
         Run(document, path)
 except FileNotFoundError:
-    print(f"Error: Archivo de entrada no encontrado en '{inputfile_path}'")
+    print(f"Error: Archivo de entrada no encontrado en '{text_4analysis}'.")
 except Exception as e:
     print(f"Ocurrió un error: {e}")
     traceback.print_exc() # Imprime el traceback completo para más detalles
