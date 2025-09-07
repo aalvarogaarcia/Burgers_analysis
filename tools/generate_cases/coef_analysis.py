@@ -64,11 +64,11 @@ def generate_coefficient_study_cases():
         'SCHEME': 'DC',
         'DT': 0.0001, 'TSIM': 2.0, 'NDUMP': 1000,
         'VISC': 0.001,
-        'INISOL': 'TAYLOR_GREEN',
+        'INISOL': 'GAUSSIAN_2D',
         'USE_LES': True, # LES siempre está activado para este estudio
         'USE_FORCING': True,
-        'FORCING_K_MIN': 2.0,
-        'FORCING_K_MAX': 5.0,
+        'FORCING_K_MIN': 0.,
+        'FORCING_K_MAX': 1.0,
         'FORCING_AMPLITUDE': 0.05
     }
     
