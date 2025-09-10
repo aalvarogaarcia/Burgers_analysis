@@ -53,7 +53,7 @@ def getResidualBrurgersFR(U, p, x, v_molecular, Lp, gp, use_les=False, sgs_param
 
     # --- Paso 2a: Calcular flujo SGS si LES está activado ---
     F_sgs = np.zeros(nnode) # Inicializar flujo SGS
-    if use_les and sgs_params is not None:
+    if use_les and (sgs_params is not None):
         sgs_model_type = sgs_params.get('model_type', 'smagorinsky_dynamic')
         if sgs_model_type.lower() == 'smagorinsky_dynamic':
             # Calcular Cd dinámicamente
@@ -67,7 +67,7 @@ def getResidualBrurgersFR(U, p, x, v_molecular, Lp, gp, use_les=False, sgs_param
                 gp_array=gp, # Se necesita para las derivadas dentro de la función de Cd
                 filter_width_ratio=sgs_params.get('filter_width_ratio', 2.0),
                 avg_type=sgs_params.get('avg_type', 'global'),
-                cs_min_val=sgs_params.get('Cs_min',0.01)
+                cs_min=sgs_params.get('Cs_min',0.01)
             )
             # Calcular el flujo SGS usando el Cd dinámico
             F_sgs = sgs_model.get_sgs_flux_smagorinsky_dynamic(
@@ -178,7 +178,7 @@ def get_residual_dc_1d(U, N, dx, v_molecular, use_les=False, sgs_params=None):
     """
     # --- 1. Calcular la viscosidad total ---
     v_total = v_molecular
-    if use_les and sgs_params is not None:
+    if use_les and (sgs_params is not None):
         # Para los modelos de bajo orden, necesitamos el gradiente de la velocidad.
         # Lo calculamos también con diferencias centradas.
         dudx = (np.roll(U, -1) - np.roll(U, 1)) / (2 * dx)
@@ -500,7 +500,7 @@ def get_residual_2d_dc(U, coords, v_molecular, Nx, Ny, use_les, sgs_params, forc
             nu_e = sgs_model.calculate_vreman_eddy_viscosity(dudx, dudy, dvdx, dvdy, Nx, Ny, c_vreman)
         elif model_type == 'SMAGORINSKY':
             Cs = sgs_params.get('Cs', 0.1)
-            nu_e = sgs_model.calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, 0, Nx, Ny, Cs)  
+            nu_e = sgs_model.calculate_smagorinsky_eddy_viscosity(dudx, dudy, dvdx, dvdy, Nx, Ny, Cs)  
                       
     # 3. Calcular el tensor de estrés total (molecular + SGS)
     total_viscosity = v_molecular + nu_e

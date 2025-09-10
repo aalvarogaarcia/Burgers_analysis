@@ -25,6 +25,7 @@ def write_1d_config_file(config, filename, subdirectory):
         f.write(f"DT            {config['DT']:.6f} # Time step\n")
         f.write(f"TSIM          {config['TSIM']:.6f} # Maximum simulation time\n")
         f.write(f"NDUMP               {config['NDUMP']} # Interval to dump a solution\n")
+        f.write(f"SCHEME          {config.get('SCHEME', 'FR')} # Numerical scheme\n")
         f.write("# --- LES Parameters ---\n")
         f.write(f"USE_LES                   {'TRUE' if config.get('USE_LES', False) else 'FALSE'}\n")
 
@@ -34,7 +35,7 @@ def generate_1d_convergence_cases():
     """
     print("--- Iniciando generación de casos de convergencia 1D ---")
     base_config_1d = {
-        'NREF': 0, 'VISC': 0.01, 'INISOL': 'SINE', 'TSIM': 2.0, 'NDUMP': 2000, 'USE_LES': False
+        'NREF': 0, 'VISC': 0.01, 'INISOL': 'SINE', 'TSIM': .60, 'NDUMP': 2000, 'USE_LES': False, 'SCHEME': 'FR'
     }
     p_values = [2, 3, 4, 5]
     n_values = [10, 20, 40, 80, 160]
@@ -51,6 +52,28 @@ def generate_1d_convergence_cases():
             write_1d_config_file(case_config, filename, subdirectory)
     print(f"Se generaron {len(p_values) * len(n_values)} ficheros 1D en data/inputs/convergence_study_1d/\n")
 
+def generate_1d_turbulent_cases():
+    """
+    Genera el conjunto de ficheros de entrada para casos 1D con condiciones iniciales turbulentas.
+    """
+    print("--- Iniciando generación de casos 1D con condiciones iniciales turbulentas ---")
+    base_config_1d = {
+        'NREF': 0, 'VISC': 0.001, 'INISOL': 'TURBULENT', 'TSIM': 0.6, 'NDUMP': 2000, 'USE_LES': False, 'SCHEME': 'FR'    
+        }
+    p_values = [2, 3, 4, 5]
+    n_values = [65, 129, 160, 257]
+    
+    for p in p_values:
+        for n in n_values:
+            case_config = base_config_1d.copy()
+            case_config['P'] = p
+            case_config['N'] = n
+            case_config['DT'] = 0.0001 # DT fijo para el caso 1D es más estable
+            
+            filename = f"turbulent_1d_p{p}_n{n}.txt"
+            subdirectory = "turbulent_cases_1d"
+            write_1d_config_file(case_config, filename, subdirectory)
+    print(f"Se generaron {len(p_values) * len(n_values)} ficheros 1D en data/inputs/turbulent_cases_1d/\n")
 
 # ==============================================================================
 # PUNTO DE ENTRADA PRINCIPAL
@@ -62,7 +85,7 @@ if __name__ == "__main__":
     
     # Generar casos 1D
     generate_1d_convergence_cases()
-    
+    generate_1d_turbulent_cases()
     
     print("---------------------------------------------------------")
     print("¡Proceso completado! Todos los ficheros han sido creados.")

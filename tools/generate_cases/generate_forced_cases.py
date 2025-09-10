@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     # Configuración base común para todos los casos forzados
     forced_base_config = {
-        'NX': 65, 'NY': 65, 'P': 3, 'DT': 0.0001, 'TSIM': 2.0, 'NDUMP': 1000,
+        'NX': 65, 'NY': 65, 'P': 3, 'DT': 0.001, 'TSIM': 1.0, 'NDUMP': 1000,
         'VISC': 0.001,
         'USE_FORCING': True,
         'FORCING_K_MIN': 2.0,
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Definir las variaciones para los casos forzados
     # Usamos una única condición inicial, ya que el forzamiento dominará el flujo.
     forced_variations = [
-        {'INISOL': 'TAYLOR_GREEN', 'id': 'forced'},
+        {'INISOL': 'GAUSSIAN_2D', 'id': 'forced'},
     ]
 
     # 1. Generar casos FORZADOS SIN LES (ILES)

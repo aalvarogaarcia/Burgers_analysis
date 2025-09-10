@@ -10,6 +10,7 @@ import glob
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from src.utils.randw import getValueFromLabel, ReadBlockData
 
+
 def load_solution_data(filepath):
     """Carga los datos de un archivo de solución .txt."""
     with open(filepath, 'r') as f:
@@ -18,10 +19,10 @@ def load_solution_data(filepath):
     if not data_lines:
         print(f"Error: No se encontró el bloque de solución en {filepath}")
         return None, None, None, None, None, None
-    data = np.loadtxt(data_lines)
+    data = np.loadtxt(data_lines[1:])
     nx = int(getValueFromLabel(document, "NX"))
     ny = int(getValueFromLabel(document, "NY"))
-    return data[:, 0], data[:, 1], data[:, 2], data[:, 3], nx, ny
+    return data[:, 0], data[:, 1], data[:, 3], data[:, 2], nx, ny
 
 def compute_vorticity(u_grid, v_grid, x_coords_vec, y_coords_vec):
     """

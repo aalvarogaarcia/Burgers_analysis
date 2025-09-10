@@ -20,6 +20,7 @@ from src.core.ode import *
 import os
 import matplotlib.pyplot as plt
 import glob
+from src.utils.postprocess import *
 
 # Print the usage of the program
 def Usage():

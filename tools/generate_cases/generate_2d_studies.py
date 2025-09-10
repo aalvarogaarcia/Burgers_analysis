@@ -59,9 +59,9 @@ def generate_decay_cases():
     base_config = {
         'NX': 65, 'NY': 65, 'P': 3, # P no se usa en DC, pero se mantiene por consistencia
         'SCHEME': 'DC',
-        'DT': 0.0001, 'TSIM': 1.0, 'NDUMP': 500,
-        'VISC': 0.005,
-        'INISOL': 'TAYLOR_GREEN',
+        'DT': 0.0001, 'TSIM': .5, 'NDUMP': 500,
+        'VISC': 0.08,
+        'INISOL': 'GAUSSIAN_2D',
         'USE_FORCING': False
     }
     
@@ -70,21 +70,21 @@ def generate_decay_cases():
     # Caso 1: ILES (sin modelo)
     iles_config = base_config.copy()
     iles_config['USE_LES'] = False
-    write_config_file(iles_config, "DC_ILES_decay.txt", subdirectory)
+    write_config_file(iles_config, "DC_decay.txt", subdirectory)
     
     # Caso 2: Smagorinsky
     smagorinsky_config = base_config.copy()
     smagorinsky_config.update({
         'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.15
     })
-    write_config_file(smagorinsky_config, "DC_Smagorinsky_decay.txt", subdirectory)
+    write_config_file(smagorinsky_config, "Smagorinsky_Cs0.15_decay.txt", subdirectory)
     
     # Caso 3: Vreman
     vreman_config = base_config.copy()
     vreman_config.update({
         'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.07
     })
-    write_config_file(vreman_config, "DC_Vreman_decay.txt", subdirectory)
+    write_config_file(vreman_config, "Vreman_Cv0.07_decay.txt", subdirectory)
 
 def generate_forced_cases():
     """
@@ -95,9 +95,9 @@ def generate_forced_cases():
     base_config = {
         'NX': 65, 'NY': 65, 'P': 3,
         'SCHEME': 'DC',
-        'DT': 0.0001, 'TSIM': 2.0, 'NDUMP': 1000,
-        'VISC': 0.001,
-        'INISOL': 'TAYLOR_GREEN', # La condición inicial es menos crítica con forzante
+        'DT': 0.0001, 'TSIM': .5, 'NDUMP': 1000,
+        'VISC': 0.01,
+        'INISOL': 'GAUSSIAN_2D', # La condición inicial es menos crítica con forzante
         'USE_FORCING': True,
         'FORCING_K_MIN': 2.0,
         'FORCING_K_MAX': 5.0,
@@ -109,21 +109,21 @@ def generate_forced_cases():
     # Caso 1: ILES (con forzante)
     iles_config = base_config.copy()
     iles_config['USE_LES'] = False
-    write_config_file(iles_config, "DC_ILES_forced.txt", subdirectory)
+    write_config_file(iles_config, "DC_forced.txt", subdirectory)
     
     # Caso 2: Smagorinsky (con forzante)
     smagorinsky_config = base_config.copy()
     smagorinsky_config.update({
         'USE_LES': True, 'SGS_MODEL_TYPE': 'SMAGORINSKY', 'SGS_CS_CONSTANT': 0.15
     })
-    write_config_file(smagorinsky_config, "DC_Smagorinsky_forced.txt", subdirectory)
+    write_config_file(smagorinsky_config, "Smagorinsky_Cs0.15_forced.txt", subdirectory)
     
     # Caso 3: Vreman (con forzante)
     vreman_config = base_config.copy()
     vreman_config.update({
         'USE_LES': True, 'SGS_MODEL_TYPE': 'VREMAN', 'SGS_C_VREMAN': 0.07
     })
-    write_config_file(vreman_config, "DC_Vreman_forced.txt", subdirectory)
+    write_config_file(vreman_config, "Vreman_Cv0.07_forced.txt", subdirectory)
 
 # ==============================================================================
 # PUNTO DE ENTRADA PRINCIPAL

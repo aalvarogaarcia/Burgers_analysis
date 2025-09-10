@@ -24,6 +24,8 @@ from src.core.residual import *
 import traceback
 import os
 import glob
+import time
+
 
 def Usage():
     print("Usage: fr-burgers-2d.py inputfilename")
@@ -89,6 +91,8 @@ def Run(document, lab):
         U = np.zeros(2 * num_nodes)
         FillInitialSolution_2D(U, x_ho, y_ho, IniS, Nx, Ny, p, Nref)
         snapshot_counter = 0
+        
+        start_time = time.time()
     # Bucle temporal principal para FR
         for it in range(Nmax):
         # Los argumentos son específicos para el residuo de FR
@@ -115,6 +119,14 @@ def Run(document, lab):
                 print(f"¡ERROR! Inestabilidad numérica detectada en la iteración {it+1}.")
                 print(f"Guardando el último estado estable en t = {it*dt:.4f}.")
                 lab_failed = lab.replace('.out', '_FAILED.out')
+                end_time = time.time()
+                execution_time = end_time - start_time
+    
+                 # Imprime el resultado del benchmark en un formato fácil de leer
+                print(f"--- BENCHMARK RESULT ---")
+                print(f"File: {os.path.basename(lab)}")
+                print(f"Total Execution Time: {execution_time:.4f} seconds")
+                print(f"------------------------")
                 WriteFile_2D(lab_failed, x_ho, y_ho, U_last_stable, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, sgs_params,forcing_params)
                 break
             
@@ -126,7 +138,7 @@ def Run(document, lab):
                 snapshot_lab = lab.replace('.txt', f'_snapshot_{snapshot_counter:04d}.txt')
                 WriteFile_2D(snapshot_lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, sgs_params, forcing_params) 
             
-            
+        
         else: 
             simulation_completed = True
                 
@@ -151,6 +163,7 @@ def Run(document, lab):
         
     # Bucle temporal principal para DC
         snapshot_counter = 0
+        start_time = time.time()
         for it in range(Nmax):
             U_last_stable = np.copy(U)
 
@@ -188,6 +201,15 @@ def Run(document, lab):
     else:
         raise ValueError(f"Esquema '{scheme}' no reconocido. Use 'fr' o 'dc'.")
 
+    end_time = time.time()
+    execution_time = end_time - start_time
+    
+    # Imprime el resultado del benchmark en un formato fácil de leer
+    print(f"--- BENCHMARK RESULT ---")
+    print(f"File: {os.path.basename(lab)}")
+    print(f"Total Execution Time: {execution_time:.4f} seconds")
+    print(f"------------------------")
+                    
     if simulation_completed:
         print("Simulación completada con éxito. Guardando estado final.")
         if scheme.lower() == 'fr':

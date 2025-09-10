@@ -73,6 +73,7 @@ def FillInitialSolution_1D(U,x,IniS,Np,p,Nref):
         pd     = int(getValueFromLabel(document,"P"))
         Nrefd  = int(getValueFromLabel(document,"NREF"))
         
+        
         if (Nd != Np or pd != p or Nrefd != Nref):
             print("Initial solution not compatible with current parameters")
             exit()
@@ -115,13 +116,23 @@ def FillInitialSolution_2D(U, x, y, IniS, Nx, Ny, p, Nref):
         v_view[:] = -np.cos(np.pi * x) * np.sin(np.pi * y)
     
     elif IniS == "GAUSSIAN_2D":
-        # Un pulso Gaussiano en el centro del dominio para la componente u
-        u_view[:] = np.exp(-100 * ((x - 0.5)**2 + (y - 0.5)**2))
-        v_view[:] = 0.0 # Sin velocidad inicial en v
+    # Definir la función Gaussiana 2D
+        alpha = 50.0  # Controla la anchura de la gaussiana
+        c0 = 20.0      # Velocidad característica
+        beta = 5.0   # Controla la amplitud de la velocidad inicial
+        G = np.exp(-alpha * ((x-0.5)**2 + (y-0.5)**2))
+
+    # Calcular la componente x de la velocidad inicial (u)
+    # u_i = c0 * beta * x * G
+        u_view[:] = c0 * beta * x * G
+
+    # Calcular la componente y de la velocidad inicial (v)
+    # v_i = c0 * beta * y * G
+        v_view[:] = c0 * beta * y * G
         
     else:
         print(f"ADVERTENCIA: Condición inicial 2D '{IniS}' no reconocida. Usando cero.")
         u_view[:] = 0.0
-        v_view[:] = 0.0
+        v_view[:] = 0.0  
         
             

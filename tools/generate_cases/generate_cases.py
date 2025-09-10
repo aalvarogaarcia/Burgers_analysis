@@ -71,13 +71,13 @@ if __name__ == "__main__":
     print("==========================================================")
     
     base_config = {
-        'NX': 33, 'NY': 33, 'P': 3, 'DT': 0.0001, 'TSIM': 1.0, 'NDUMP': 500,
-        'VISC': 0.005
+        'NX': 15, 'NY': 15, 'P': 3, 'DT': 0.000001, 'TSIM': .005, 'NDUMP': 500,
+        'VISC': 0.0001, 'USE_FORCING': False
     }
     
     # Definir las variaciones para los casos de decaimiento
     decay_variations = [
-        {'INISOL': 'TAYLOR_GREEN', 'id': 'decay'},
+        {'INISOL': 'GAUSSIAN_2D', 'id': 'decay', 'SCHEME': 'FR', 'NREF':0},
     ]
     
     # 1. Casos ILES (Implicit LES)

@@ -1,112 +1,136 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Sep 30 22:24:55 2024
-
-@author: Jesús Pueblas
-"""
-
-from sys import argv
-from ...src.utils.randw import *
+# tools/analysis/plot_convergence.py
+import numpy as np
 import matplotlib.pyplot as plt
-from ...src.core.mesh import *
+import sys
+import os
+import glob
+import re
 
-# Computes the L2Norm betwee two solutions
-# contained in documenta and documentb
-# documentb is one refinement level from documenta
-def getL2Norm(documenta,documentb):
-    dof    = 0.
-    l2norm = 0.
-    Na      = int(getValueFromLabel(documenta,"N"))
-    Nb      = int(getValueFromLabel(documentb,"N"))
-    pa      = int(getValueFromLabel(documenta,"P"))
-    pb      = int(getValueFromLabel(documentb,"P"))
-    Nrefa   = int(getValueFromLabel(documenta,"NREF"))
-    Nrefb   = int(getValueFromLabel(documentb,"NREF"))
-    if (Na != Nb):
-        return dof,l2norm
-    if (pa != pb):
-        return dof,l2norm
-    if (Nrefb-Nrefa != 1):
-        return dof,l2norm
-    
-    # Create the cells mesh from documenta
-    xa = getMesh(Na,Nrefa)
-    dof = len(xa)
-    # Read the mesh and solution from docuemnta
-    xsa,usa = GetMeshAndSolution(documenta)
-    # Read the mesh and solution from docuemntb
-    xsb,usb = GetMeshAndSolution(documentb)
-    #Take the solution of the boundary cells for mesh a
-    nnodea = len(usa)
-    ncellsa = int(nnodea / (pa+1))
-    ua = [ ]
-    ua.append(usa[0])
-    for icell in range(0,ncellsa-1):
-        inodeL = icell*(pa+1)+pa
-        inodeR = (icell+1)*(pa+1)
-        ua.append(usa[inodeL])
-        ua.append(usa[inodeR])
-    ua.append(usa[nnodea-1])
+# --- Importar Funciones del Repositorio ---
+# Se añade la ruta raíz del proyecto para que el script pueda encontrar los módulos
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from src.utils.randw import getValueFromLabel, GetMeshAndSolution
+from src.core.mesh import get_mesh_1d
 
-    #Take the solution of the boundary cells for mesh b
-    nnodeb = len(usb)
-    ncellsb = int(nnodeb / (pb+1))
-    ub = [ ]
-    ub.append(usb[0])
-    for icell in range(0,ncellsa-1):
-        inodeL = 2*icell*(pa+1)+2*(pa+1)-1
-        inodeR = inodeL+1
-        ub.append(usb[inodeL])
-        ub.append(usb[inodeR])
-    ub.append(usb[nnodeb-1])
+def getL2Norm_from_consecutive_meshes(document_coarse, document_fine):
+    """
+    Calcula la norma L2 entre dos soluciones de mallas consecutivas,
+    basado en la lógica original de tu 'compute_convergence.py'.
+    """
+    # Extraer parámetros de los documentos
+    pa = int(getValueFromLabel(document_coarse, "P"))
+    pb = int(getValueFromLabel(document_fine, "P"))
+    Na = int(getValueFromLabel(document_coarse, "N"))
+    Nb = int(getValueFromLabel(document_fine, "N"))
+
+    # Condición de validez: mismo polinomio y la malla 'b' debe ser aproximadamente el doble de 'a'
+    if pa != pb or not (Nb == 2 * Na or Nb == 2 * Na -1):
+        # print(f"  -> Advertencia: Par de mallas no consecutivas (N={Na}, N={Nb}). Saltando.")
+        return 0., 0.
         
-    for inode in range(0,len(ua)):
-        delta = ub[inode] - ua[inode]
-        l2norm += delta * delta
+    xsa, usa = GetMeshAndSolution(document_coarse)
+    xsb, usb = GetMeshAndSolution(document_fine)
     
-    l2norm = np.sqrt(l2norm/len(ua))
+    if xsa.size == 0 or xsb.size == 0:
+        return 0., 0.
+
+    # Interpolar la solución más fina (b) a los puntos de la malla gruesa (a) para comparar
+    usb_interpolated = np.interp(xsa, xsb, usb)
+    
+    # Calcular la norma L2 de la diferencia
+    delta = usa - usb_interpolated
+    l2norm = np.sqrt(np.mean(delta**2))
+    
+    # Los grados de libertad son los de la malla gruesa
     dof = len(xsa)
 
-    return dof,l2norm    
+    return dof, l2norm
+
+def extract_params_from_filename(filepath):
+    """Extrae 'p' y 'n' del nombre del archivo."""
+    basename = os.path.basename(filepath)
+    p_match = re.search(r'_p(\d+)_', basename)
+    n_match = re.search(r'_n(\d+)\.txt', basename)
+    p = int(p_match.group(1)) if p_match else 0
+    n = int(n_match.group(1)) if n_match else 0
+    return p, n
+
+def main(input_dir):
+    """
+    Función principal que procesa un directorio, calcula errores de convergencia
+    y genera la gráfica final.
+    """
+    if not os.path.isdir(input_dir):
+        print(f"Error: La ruta proporcionada no es un directorio válido: {input_dir}")
+        return
+
+    all_files = glob.glob(os.path.join(input_dir, "conv_1d_p*_n*.txt"))
+    families = {}
+    for f in all_files:
+        p, _ = extract_params_from_filename(f)
+        if p not in families: families[p] = []
+        families[p].append(f)
+
+    if not families:
+        print(f"No se encontraron archivos de resultados en '{input_dir}'")
+        return
+
+    # --- Inicio de la Gráfica ---
+    plt.style.use('seaborn-v0_8-whitegrid')
+    fig, ax = plt.subplots(figsize=(12, 8))
     
+    for p, files in sorted(families.items()):
+        print(f"\nProcesando familia P={p}...")
+        sorted_files = sorted(files, key=lambda f: extract_params_from_filename(f)[1])
+        
+        if len(sorted_files) < 2:
+            print(f"  -> Se necesitan al menos 2 mallas para el análisis de P={p}. Saltando.")
+            continue
 
-documents = []
-for i in range(1,len(argv)):
-  inputfile=open(argv[i],'r')
-  documents.append(inputfile.readlines()) 
-  inputfile.close()
+        dofs_inv, errors = [], []
 
-dof    = np.zeros(len(documents)-1)
-l2norm = np.zeros(len(documents)-1)
+        # Comparar mallas consecutivas (n, 2n), (2n, 4n), etc.
+        for i in range(len(sorted_files) - 1):
+            coarse_file = sorted_files[i]
+            fine_file = sorted_files[i+1]
+            
+            with open(coarse_file, 'r') as f: doc_coarse = f.readlines()
+            with open(fine_file, 'r') as f: doc_fine = f.readlines()
 
-for i in range(0,len(documents)-1):
-  dofi,l2normi = getL2Norm(documents[i],documents[i+1])
-  print(dofi,l2normi)
-  dof[i]    = 1./dofi
-  l2norm[i] = l2normi
+            dof, error = getL2Norm_from_consecutive_meshes(doc_coarse, doc_fine)
+            
+            if dof > 0 and not np.isnan(error):
+                dofs_inv.append(1.0 / dof)
+                errors.append(error)
+                n1, n2 = extract_params_from_filename(coarse_file)[1], extract_params_from_filename(fine_file)[1]
+                print(f"  -> Error L2 (n={n1} vs n={n2}): {error:.4e}")
 
-plt.plot(dof,l2norm,'o-',label="p=1")
+        if dofs_inv:
+            line, = ax.loglog(dofs_inv, errors, 'o-', label=f'P={p} (medido)')
+            
+            # Graficar pendiente teórica O(h^(p+1))
+            C = errors[0] / (dofs_inv[0]**(p + 1))
+            dof_trend = np.array([dofs_inv[0], dofs_inv[-1]])
+            error_trend = C * dof_trend**(p + 1)
+            ax.loglog(dof_trend, error_trend, '--', color=line.get_color(), label=f'~dof$^{{-({p+1})}}$ (teórico)')
 
-doftrend = np.zeros(2)
-l2etrend = np.zeros(2)
+    # --- Configuración final de la gráfica ---
+    ax.set_xlabel('1 / Grados de Libertad (dof)')
+    ax.set_ylabel('Error en Norma L2')
+    ax.set_title('Análisis de Convergencia del Solver FR')
+    ax.legend()
+    ax.grid(True, which="both", ls="--")
+    
+    output_filename = "analisis_convergencia_solver_fr.png"
+    plt.savefig(output_filename, dpi=150, bbox_inches='tight')
+    plt.show()
+    print(f"\n📈 Gráfica de convergencia guardada en: {output_filename}")
 
-# Parameters for p=3
-#c1 = 600
-#p = 3
-
-# Parameters for p=4
-c1 = 2000
-p = 2
-
-doftrend[0] = 1./4
-doftrend[1] = 1./1000
-l2etrend[0] = c1*doftrend[0]**(p+1)
-l2etrend[1] = c1*doftrend[1]**(p+1)
-plt.plot(doftrend,l2etrend,'--',label="(1/dof)^2")
-
-plt.xlabel('1/dof')
-plt.ylabel('l2norm(error)')
-plt.legend(loc='upper left')
-plt.xscale("log")
-plt.yscale("log")
-plt.show()
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("\nUso: python tools/analysis/plot_convergence.py <ruta_al_directorio_de_resultados>")
+        print("Ejemplo: python tools/analysis/plot_convergence.py data/outputs/convergence_study_1d/")
+        sys.exit(1)
+    
+    results_directory = sys.argv[1]
+    main(results_directory)

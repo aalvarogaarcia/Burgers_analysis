@@ -16,6 +16,7 @@ import glob
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from src.utils.randw import *
+from src.utils.postprocess import getSolutionInUniformMesh, collpaseCommonNodes 
 
 # --- FUNCIONES DE AYUDA ---
 
@@ -138,7 +139,10 @@ def getTKEFFT(x, U):
 def plot_1d_results(ax1, ax2, x, u, label):
     """Crea las gráficas para resultados 1D (solución y espectro)."""
     # Gráfica de la solución
-    ax1.plot(x, u, label=label)
+    if label == "SolucionInicial":
+        ax1.plot(x, u, '--', label=label, markersize=1, alpha=0.7)
+    else:
+        ax1.plot(x, u, label=label)
     ax1.set_title("Solución u(x)")
     ax1.set_xlabel("x")
     ax1.set_ylabel("u")
@@ -152,7 +156,10 @@ def plot_1d_results(ax1, ax2, x, u, label):
         ut = u[:-1]
         k, tke = getTKEFFT(xt, ut)
         if len(k) > 0:
-            ax2.loglog(k, tke, label=label)
+            if label == "SolucionInicial":
+                ax2.loglog(k, tke, '--', label=label, markersize=1, alpha=0.7)
+            else:
+                ax2.loglog(k, tke, label=label)
 
     ax2.set_title("Espectro de Energía (1D)")
     ax2.set_xlabel("Número de Onda (k)")
@@ -225,9 +232,13 @@ if __name__ == "__main__":
 
             print(f"Procesando y superponiendo: {os.path.basename(filepath)}")
             
-            # Extraer datos del archivo
+            # Extraer datos del archivo¡
+            p = int(getValueFromLabel(document, "P"))
+            scheme = getValueFromLabel(document, "SCHEME")
             x, u = get_mesh_and_solution_1d(document)
-            
+            if scheme.upper() == 'FR':
+                x, u = getSolutionInUniformMesh(x, u, p)  # Asumiendo p=3, ajustar según sea necesario
+                x, u = collpaseCommonNodes(x, u, p)
             # Crear una etiqueta limpia para la leyenda del gráfico
             label = os.path.basename(filepath).replace('.txt', '').replace('_', ' ')
             
