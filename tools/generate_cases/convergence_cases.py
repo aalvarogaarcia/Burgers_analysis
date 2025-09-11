@@ -35,7 +35,7 @@ def generate_1d_convergence_cases():
     """
     print("--- Iniciando generación de casos de convergencia 1D ---")
     base_config_1d = {
-        'NREF': 0, 'VISC': 0.01, 'INISOL': 'SINE', 'TSIM': .60, 'NDUMP': 2000, 'USE_LES': False, 'SCHEME': 'FR'
+        'NREF': 0, 'VISC': 0.01, 'INISOL': 'SINE', 'TSIM': .10, 'NDUMP': 2000, 'USE_LES': False, 'SCHEME': 'FR'
     }
     p_values = [2, 3, 4, 5]
     n_values = [10, 20, 40, 80, 160]

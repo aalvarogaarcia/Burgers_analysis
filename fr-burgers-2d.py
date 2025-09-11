@@ -79,8 +79,12 @@ def Run(document, lab):
     
     # Crear malla y operadores para FR
         lobatto_points, Lp_matrix, gp_array = getStandardElementData(p)
-        x_grid, y_grid = get_2d_cartesian_mesh(Nx, Ny)
-        x_ho, y_ho = get_mesh_ho_2d(x_grid, y_grid, p, lobatto_points)
+        if IniS.lower() == 'taylor_green':
+            x_grid, y_grid = get_2d_cartesian_mesh(Nx, Ny, Lx=(2*np.pi), Ly=(2*np.pi))
+            x_ho, y_ho = get_mesh_ho_2d(x_grid, y_grid, p, lobatto_points)
+        else:
+            x_grid, y_grid = get_2d_cartesian_mesh(Nx, Ny)
+            x_ho, y_ho = get_mesh_ho_2d(x_grid, y_grid, p, lobatto_points)
 
         if use_forcing:
             xx_base, yy_base = np.meshgrid(x_grid, y_grid, indexing='ij')
@@ -93,7 +97,7 @@ def Run(document, lab):
         snapshot_counter = 0
         
         start_time = time.time()
-    # Bucle temporal principal para FR
+     # Bucle temporal principal para FR
         for it in range(Nmax):
         # Los argumentos son específicos para el residuo de FR
             U_last_stable = np.copy(U)
@@ -145,13 +149,16 @@ def Run(document, lab):
 
 
     elif scheme.lower() == 'dc':
-    # --- Rama para Diferencias Centradas (DC) de 2º orden ---
+     # --- Rama para Diferencias Centradas (DC) de 2º orden ---
         print(f"INFO: Configurando simulación con esquema DC. El orden P={p} será ignorado.")
         p_dc = 0 # En DC, cada nodo es un elemento, p=0.
         
    
-    # La malla es la malla cartesiana simple
-        x_coords, y_coords = get_2d_cartesian_mesh(Nx, Ny)
+     # La malla es la malla cartesiana simple
+        if IniS.lower() == 'taylor_green':
+            x_coords, y_coords = get_2d_cartesian_mesh(Nx, Ny, Lx=(2*np.pi), Ly=(2*np.pi))
+        else:
+            x_coords, y_coords = get_2d_cartesian_mesh(Nx, Ny)
         
         xx, yy = np.meshgrid(x_coords, y_coords)
         x_coords_full = xx.flatten()

@@ -112,23 +112,23 @@ def FillInitialSolution_2D(U, x, y, IniS, Nx, Ny, p, Nref):
         # que es excelente para verificar la convergencia del código.
         # u(x,y) = sin(pi*x) * cos(pi*y)
         # v(x,y) = -cos(pi*x) * sin(pi*y)
-        u_view[:] = np.sin(np.pi * x) * np.cos(np.pi * y)
-        v_view[:] = -np.cos(np.pi * x) * np.sin(np.pi * y)
+        u_view[:] = np.sin(x) * np.cos(y)
+        v_view[:] = -np.cos(x) * np.sin(y)
     
     elif IniS == "GAUSSIAN_2D":
     # Definir la función Gaussiana 2D
         alpha = 50.0  # Controla la anchura de la gaussiana
         c0 = 20.0      # Velocidad característica
         beta = 5.0   # Controla la amplitud de la velocidad inicial
-        G = np.exp(-alpha * ((x-0.5)**2 + (y-0.5)**2))
+        G = beta*np.exp(-alpha * ((x-0.5)**2 + (y-0.5)**2))
 
     # Calcular la componente x de la velocidad inicial (u)
     # u_i = c0 * beta * x * G
-        u_view[:] = c0 * beta * x * G
+        u_view[:] = c0 - y * G
 
     # Calcular la componente y de la velocidad inicial (v)
     # v_i = c0 * beta * y * G
-        v_view[:] = c0 * beta * y * G
+        v_view[:] = x * G
         
     else:
         print(f"ADVERTENCIA: Condición inicial 2D '{IniS}' no reconocida. Usando cero.")
