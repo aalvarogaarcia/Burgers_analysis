@@ -6,6 +6,7 @@ Created on Sun Sep 29 07:01:23 2024
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy import *
 from scipy.integrate import quad
 from scipy.integrate import simpson
@@ -135,4 +136,49 @@ def FillInitialSolution_2D(U, x, y, IniS, Nx, Ny, p, Nref):
         u_view[:] = 0.0
         v_view[:] = 0.0  
         
+# --- FUNCIONES AUXILIARES PARA CALCULO DE LA VARIACIÓN DE ENERGÍA 2D ---
+
             
+def calculate_total_ke_2d(U):
+    """
+    Calcula la energía cinética total promediada a partir del vector de solución 2D.
+    """
+    num_nodes_per_var = len(U) // 2
+    u = U[:num_nodes_per_var]
+    v = U[num_nodes_per_var:]
+    
+    # La energía cinética por nodo es 0.5 * (u^2 + v^2)
+    # La energía total es el promedio sobre todos los nodos.
+    total_ke = 0.5 * np.mean(u**2 + v**2)
+    return total_ke
+
+def setup_energy_plot():
+    """
+    Inicializa la figura para la gráfica de evolución de la energía.
+    """
+    plt.ion() # Activar modo interactivo
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.set_title("Evolución de la Energía Cinética Total")
+    ax.set_xlabel("Tiempo (t)")
+    ax.set_ylabel("Energía Cinética Total (ε)")
+    ax.grid(True, which="both", ls="--")
+    ax.set_yscale('log') # Escala logarítmica es útil para ver el decaimiento
+    return fig, ax
+
+def update_energy_plot(fig, ax, times, energies):
+    """
+    Actualiza la gráfica de energía con nuevos datos.
+    """
+    ax.clear() # Limpiar el eje para redibujar
+    ax.set_title("Evolución de la Energía Cinética Total")
+    ax.set_xlabel("Tiempo (t)")
+    ax.set_ylabel("Energía Cinética Total (ε)")
+    ax.grid(True, which="both", ls="--")
+    ax.set_yscale('log')
+    
+    if times: # Solo graficar si hay datos
+        ax.plot(times, energies, 'o-', label='Energía Cinética')
+        ax.legend()
+    
+    fig.canvas.draw()
+    fig.canvas.flush_events()

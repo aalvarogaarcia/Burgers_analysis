@@ -11,10 +11,11 @@ Reconstrucción de flujos Burgers en 2D
 # fr-burgers-2d.py
 
 import numpy as np
+import matplotlib.pyplot as plt
 from sys import argv, exit
 
 from src.core.mesh import get_2d_cartesian_mesh, get_mesh_ho_2d
-from src.utils.misc import FillInitialSolution_2D
+from src.utils.misc import *
 from scipy.interpolate import griddata
 
 from src.utils.randw import getValueFromLabel, WriteFile_2D, WriteInputData
@@ -72,6 +73,10 @@ def Run(document, lab):
     if (Nmax * dt < tsim): Nmax += 1
     dt = tsim / Nmax
 
+    energy_fig, energy_ax = setup_energy_plot()
+    time_history, energy_history = [], []
+
+    
     simulation_completed = False
     if scheme.lower() == "fr":
     # --- Rama para Flux Reconstruction (FR) de alto orden ---
@@ -141,7 +146,11 @@ def Run(document, lab):
                 snapshot_counter += 1
                 snapshot_lab = lab.replace('.txt', f'_snapshot_{snapshot_counter:04d}.txt')
                 WriteFile_2D(snapshot_lab, x_ho, y_ho, U, Nx, Ny, p, v, Nref, IniS, dt, tsim, Ndump, scheme, sgs_params, forcing_params) 
-            
+                current_ke = calculate_total_ke_2d(U)
+                time_history.append(current_time)
+                energy_history.append(current_ke)
+                update_energy_plot(energy_fig, energy_ax, time_history, energy_history)
+
         
         else: 
             simulation_completed = True
@@ -201,7 +210,11 @@ def Run(document, lab):
                 snapshot_counter += 1
                 snapshot_lab = lab.replace('.txt', f'_snapshot_{snapshot_counter:04d}.txt')
                 WriteFile_2D(snapshot_lab, x_coords_full, y_coords_full, U, Nx, Ny, p_dc, v, Nref, IniS, dt, tsim, Ndump, scheme, use_les, forcing_params)
-
+                
+                current_ke = calculate_total_ke_2d(U)
+                time_history.append(current_time)
+                energy_history.append(current_ke)
+                update_energy_plot(energy_fig, energy_ax, time_history, energy_history)
         else: 
             simulation_completed = True
     

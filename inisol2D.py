@@ -9,8 +9,8 @@ from src.utils.randw import WriteFile_2D
 # --- Parámetros para la solución inicial ---
 # Estos valores son necesarios para la cabecera del archivo de salida.
 params = {
-    'NX': 65,         # Número de celdas
-    'NY': 65,
+    'NX': 15,         # Número de celdas
+    'NY': 15,
     'P': 3,           # Orden del polinomio (no afecta a la solución inicial en sí)
     'VISC': 0.0,      # Viscosidad
     'Nref': 0,        # Niveles de refinamiento

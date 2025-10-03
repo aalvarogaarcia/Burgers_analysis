@@ -52,13 +52,20 @@ def extract_label_from_pattern(pattern):
     
     smag_match = re.search(r'Smagorinsky_Cs([\d.]+)', base_name, re.IGNORECASE)
     vrem_match = re.search(r'Vreman_Cv([\d.]+)', base_name, re.IGNORECASE)
+    forced = re.search(r'forced', base_name, re.IGNORECASE)
+    decay = re.search(r'decay', base_name, re.IGNORECASE)
     
     if smag_match:
         return f"Smagorinsky (Cs={smag_match.group(1)})"
     if vrem_match:
         return f"Vreman (Cv={vrem_match.group(1)})"
-    if 'ILES' in base_name.upper():
-        return 'ILES'
+    if 'ILES' in base_name.upper() or 'FR' in base_name.upper():
+        if forced:
+            return 'FR/ILES (Forzado)'
+        elif decay:
+            return 'FR/ILES (Decaimiento)'
+        else:
+            return 'FR/ILES'
         
     return base_name if base_name else "Serie"
 
@@ -72,10 +79,10 @@ def main(case_patterns):
         return
 
     fig, ax = plt.subplots(figsize=(12, 8))
-    
+    print(f"\nIniciando análisis de {len(case_patterns)} conjuntos de datos...")
     for pattern in case_patterns:
         filepaths = sorted([f for f in glob.glob(pattern) if '_FAILED' not in os.path.basename(f)])
-        
+        filepaths = filepaths[1:]
         if not filepaths:
             print(f"ADVERTENCIA: No se encontraron archivos para el patrón '{pattern}'.")
             continue
